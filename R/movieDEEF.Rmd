@@ -1,0 +1,226 @@
+---
+title: "映画をDEEFする"
+author: "ryamada"
+date: "2019/7/14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## モノクロ映画をDEEFする
+
+```{r}
+Nxyz <- c(100,100,50) # 2D画像サイズ x 時刻数
+
+# 映画には、背景と、動き回る物体とからなる
+# 背景もややブレたりする
+# 動き回る物体は形を変え、濃淡も変える
+# ここでは簡単のために、背景は、ブレや濃淡変化がごく小さいものとし
+# 動き回る物体は、かなりダイナミックだとする
+
+bk <- obj1 <- obj2 <- array(0,Nxyz)
+
+Nxy <- Nxyz[1] * Nxyz[2]
+```
+
+### 背景の初期値
+
+```{r}
+bk[,,1] <- runif(Nxy)^3
+bkori <- bk[,,1]
+n.step <- 1000
+lambda <- 10
+rpois. <- matrix(rpois(2*n.step,lambda),ncol=2)
+for(i in 1:n.step){ 
+  if(rpois.[i,1]==0){
+    tmpx <- 1:Nxyz[1]
+  }else if(rpois.[i,1]==1){
+    tmpx <- c(2:Nxyz[1],1)
+  }else{
+    tmpx <- c(rpois.[i,1]:Nxyz[1],1:(rpois.[i,1]-1))
+  }
+  if(rpois.[i,2]==0){
+    tmpy <- 1:Nxyz[2]
+  }else if(rpois.[i,2]==1){
+    tmpy <- c(2:Nxyz[2],1)
+  }else{
+    tmpy <- c(rpois.[i,2]:Nxyz[2],1:(rpois.[i,2]-1))
+  }
+  bk[,,1] <- bk[,,1] + bkori[tmpx,tmpy] * runif(1)
+}
+bk[,,1] <- bk[,,1]/sum(bk[,,1])
+```
+
+
+```{r}
+image(bk[,,1])
+```
+
+### オブジェクト１の初期値
+
+```{r}
+# 混合正規分布で一旦値を決め、その値の閾値により形を決め
+# 形について濃淡を与え直す
+
+# 正規分布の中心
+k <-9
+
+ms <- cbind((runif(k)*0.5+0.25)*Nxyz[1],(runif(k)*0.5+0.25)*Nxyz[2]) 
+# 分散共分散行列行列の非対角成分は０とする
+vs <- list()
+for(i in 1:k){
+  vs[[i]] <- diag((runif(2)+0.5)*100)
+}
+xy <- which(matrix(0,Nxyz[1],Nxyz[2])==0,arr.ind=TRUE) 
+for(i in 1:k){
+  tmp <- (t(xy)-ms[i,]) 
+  tmp2 <- (t(xy)-ms[i,]) / diag(vs[[i]]) 
+  tmp3 <- apply(tmp * tmp2,2,sum)
+  obj1[,,1] <- obj1[,,1] + exp(-1/2 * tmp3)
+}
+
+```
+
+```{r}
+image(obj1[,,1])
+# これを基準情報とする
+obj1.dist <- obj1[,,1]
+```
+
+```{r}
+obj1[,,1] <- (obj1.dist > quantile(obj1.dist,0.8))
+```
+
+```{r}
+image(obj1[,,1])
+```
+
+```{r}
+obj1[,,1] <- obj1[,,1] * runif(length(obj1[,,1]))
+obj1[,,1] <- obj1[,,1]/sum(obj1[,,1]) 
+```
+```{r}
+image(obj1[,,1]) 
+```
+
+## 時系列データを作る
+
+## 背景に揺らぎを入れる
+```{r}
+for(i in 2:Nxyz[3]){
+
+  
+  bk[,,i] <- bk[,,1] + rnorm(length(bk[,,1]),0,mean(bk[,,1])*10^(-2))
+  bk[,,i] <- bk[,,i]/sum(bk[,,i])
+
+}
+```
+
+かなり良い感じの背景のブレブレ画像ができた
+
+背景のみの映画上映
+```{r}
+for(i in 1:Nxyz[3]){
+  image(bk[,,i])
+
+}
+```
+
+## オブジェクトの形を変えつつ、濃淡を変える
+```{r}
+for(i in 2:Nxyz[3]){
+  tmp <- (obj1.dist > quantile(obj1.dist,0.8+rnorm(1,0,0.03)))
+  tmp <- tmp * runif(length(obj1[,,1]))
+  obj1[,,i] <- obj1[,,i-1] + tmp
+  obj1[,,i] <- obj1[,,i]/sum(obj1[,,i])
+}
+```
+
+オブジェクトのみの変化の様子を上映
+
+```{r}
+for(i in 1:Nxyz[3]){
+  image(obj1[,,i])
+}
+```
+
+## 背景とオブジェクトの合成画像を作る
+両者の総シグナル比をばらつかせる
+
+```{r}
+mov <- array(0,Nxyz)
+r <- 0.95 + cumsum(rnorm(Nxyz[3],0,0.001))
+for(i in 1:Nxyz[3]){
+  mov[,,i] <- bk[,,i] * r[i] + obj1[,,i] * (1-r[i]) 
+}
+
+```
+```{r}
+plot(r)
+```
+
+映画上映
+```{r}
+for(i in 1:Nxyz[3]){
+   image(mov[,,i])
+    
+}
+```
+
+ ## DEEF 分解
+ 
+```{r}
+ H <- matrix(0,Nxyz[3],Nxyz[3])
+ for(i in 1:Nxyz[3]){
+   for(j in 1:Nxyz[3]){
+     H[i,j] <- sum(mov[,,i] * mov[,,j])
+   }
+ }
+```
+ 
+```{r}
+eigen.out.H <- eigen(log(H))
+```
+```{r}
+plot(eigen.out.H[[1]])
+plot(eigen.out.H[[1]],ylim=c(0,max(eigen.out.H[[1]])))
+posi.nega <- sign(eigen.out.H[[1]])
+theta <- t(eigen.out.H[[2]] %*% diag(sqrt(eigen.out.H[[1]]*posi.nega)))
+```
+
+```{r}
+psi <- apply(theta^2,2,sum)
+plot(sort(psi))
+```
+
+```{r}
+P <- matrix(0,Nxyz[1]*Nxyz[2],Nxyz[3])
+for(i in 1:Nxyz[3]){
+  P[,i] <- c(mov[,,i])
+}
+image(P)
+```
+
+```{r}
+logP <- log(P)
+logP. <- t(t(logP + psi))
+```
+
+```{r}
+theta1 <- rbind(theta,rep(1,Nxyz[3]))
+```
+
+```{r}
+library(matlib)
+FC <- logP. %*% Ginv(theta1)
+```
+
+```{r}
+
+for(i in 1:length(FC[1,])){
+  image(matrix(FC[,i],Nxyz[1],Nxyz[2]))
+
+}
+```
