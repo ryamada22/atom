@@ -1,0 +1,165 @@
+---
+title: "Shiny Course July 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## How to use "Shiny Gallery" https://shiny.rstudio.com/gallery/ 
+
+The gallery provides samples.
+
+Shinyギャラリーにはサンプルがあります。
+
+
+If you find samples that provid　もしサンプルが以下を提供していたら
+
+* ui.R
+* server.R
+
+What you should do is to copy and paste them.
+
+### Example "Faithful" 
+"
+You should copy and paste them as;
+
+Note: You have to write "ui <- " and "server <- " besides the copy-and-paste.
+
+コピーペーストするときには、コピペ対象のほかに、"ui <- ", "server <- "
+を別途、書き加える必要があります。
+
+```{}
+ui <- bootstrapPage(
+
+  selectInput(inputId = "n_breaks",
+      label = "Number of bins in histogram (approximate):",
+      choices = c(10, 20, 35, 50),
+      selected = 20),
+
+  checkboxInput(inputId = "individual_obs",
+      label = strong("Show individual observations"),
+      value = FALSE),
+
+  checkboxInput(inputId = "density",
+      label = strong("Show density estimate"),
+      value = FALSE),
+
+  plotOutput(outputId = "main_plot", height = "300px"),
+
+  # Display this only if the density is shown
+  conditionalPanel(condition = "input.density == true",
+    sliderInput(inputId = "bw_adjust",
+        label = "Bandwidth adjustment:",
+        min = 0.2, max = 2, value = 1, step = 0.2)
+  )
+
+)
+  
+```
+
+```{}
+server <- function(input, output) {
+
+  output$main_plot <- renderPlot({
+
+    hist(faithful$eruptions,
+      probability = TRUE,
+      breaks = as.numeric(input$n_breaks),
+      xlab = "Duration (minutes)",
+      main = "Geyser eruption duration")
+
+    if (input$individual_obs) {
+      rug(faithful$eruptions)
+    }
+
+    if (input$density) {
+      dens <- density(faithful$eruptions,
+          adjust = input$bw_adjust)
+      lines(dens, col = "blue")
+    }
+
+  })
+}
+  
+```
+
+## 使う
+
+### 1 file 
+If you write them in the same file; uiとserverとを同じファイルに書いたなら、最後に１行、加えます。
+
+Add a line 
+
+```{}
+shinyApp(ui = ui, server = server)
+```
+
+Your one file should be: 全部でこんなファイル。
+
+```{}
+ui <- bootstrapPage(
+
+  selectInput(inputId = "n_breaks",
+      label = "Number of bins in histogram (approximate):",
+      choices = c(10, 20, 35, 50),
+      selected = 20),
+
+  checkboxInput(inputId = "individual_obs",
+      label = strong("Show individual observations"),
+      value = FALSE),
+
+  checkboxInput(inputId = "density",
+      label = strong("Show density estimate"),
+      value = FALSE),
+
+  plotOutput(outputId = "main_plot", height = "300px"),
+
+  # Display this only if the density is shown
+  conditionalPanel(condition = "input.density == true",
+    sliderInput(inputId = "bw_adjust",
+        label = "Bandwidth adjustment:",
+        min = 0.2, max = 2, value = 1, step = 0.2)
+  )
+
+)
+
+server <- function(input, output) {
+
+  output$main_plot <- renderPlot({
+
+    hist(faithful$eruptions,
+      probability = TRUE,
+      breaks = as.numeric(input$n_breaks),
+      xlab = "Duration (minutes)",
+      main = "Geyser eruption duration")
+
+    if (input$individual_obs) {
+      rug(faithful$eruptions)
+    }
+
+    if (input$density) {
+      dens <- density(faithful$eruptions,
+          adjust = input$bw_adjust)
+      lines(dens, col = "blue")
+    }
+
+  })
+}
+  
+shinyApp(ui = ui, server = server)
+
+```
+
+
+### 2 files
+If you save two files "ui.R" and "server.R" in the directory "hoge",
+
+Command below will activate your app.
+
+2ファイル "ui.R" "server.R" で"hoge"というディレクトリに保存したら、
+"hoge"ディレクトリを以下のようにrunApp()ファンクションにRコマンドで渡せば、アプリが立ち上がります。
+```{}
+runApp("hoge")
+```
