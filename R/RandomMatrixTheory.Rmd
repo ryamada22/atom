@@ -1,0 +1,333 @@
+---
+title: "Random Matrix Theory"
+author: "ryamada"
+date: "2019年7月26日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+参考文献：http://math.mit.edu/~edelman/publications/random_matrix_theory_innovative.pdf
+
+
+## Random Matrix Theoryのエッセンス
+
+正方行列の成分がなんらかのルールで、ランダムに決まっているとき、その行列の特徴を表している固有値や特異値の分布がどうなるか、という話。
+
+
+現象にその分布が現れていることが認められることがある。
+
+
+統計学的に、何か正方行列が観察されたときに、その固有値・特異値を上記の分布と比較すれば、検定をすることもできる。
+
+## Random Matrixの種類
+
+* Gaussian
+* Wishart
+* MONOVA
+* Circular
+* Hermite
+* Laguerre
+* Jacobi
+* Fourier
+
+## Random Matrixの実験
+
+### $m \times n $ Gaussian Random Matrix
+
+```{r}
+my.GRM <- function(m,n){
+  matrix(rnorm(m*n),ncol=n)
+}
+my.GRM.cpx <- function(m,n){
+  (my.GRM(m,n) + 1i * my.GRM(m,n))/sqrt(2)
+}
+my.t <- function(M){
+  Conj(t(M))
+}
+```
+```{r}
+m <- 3
+n <- 2
+G <- my.GRM(m,n)
+G
+```
+
+Frobenius距離(行列要素をベクトルとみなしたときの、mn次元ベクトルの長さ)
+
+mn次元標準正規分布に従う。
+
+```{r}
+my.Frobenius <- function(M){
+  sum(sqrt(Mod(G)^2))
+}
+```
+```{r}
+my.Frobenius(G)
+```
+
+### Semi-circle law と円板分布
+
+Gaussian Random Matrixと、対称化Gaussian Random Matrixについて、その固有値分布を調べる
+
+
+```{r}
+n.mat <- 1000 # n.mat x n.mat 行列
+n.iter <- 10
+lambdas.gaus <- lambdas.sym <- c()
+for(i in 1:n.iter){
+  M <- my.GRM.cpx(n.mat,n.mat)
+  #M - my.GRM(n.mat,n.mat)
+  M2 <- (M + my.t(M))/2 # 共役転置
+  eigen.out.gaus <- eigen(M)
+  eigen.out.sym <- eigen(M2)
+  lambdas.gaus <- c(lambdas.gaus,eigen.out.gaus[[1]])
+  lambdas.sym <- c(lambdas.sym,eigen.out.sym[[1]])
+}
+```
+
+Gaussian Random Matrixの固有値は、円板上一様分布となる(行列サイズを無限に大きくしたときの極限が一様分布となる)
+
+```{r}
+plot(lambdas.gaus,pch=20,cex=0.1,asp = TRUE)
+# 実軸・虚軸に射影すると、半円形分布なる
+hist(Re(lambdas.gaus))
+hist(Im(lambdas.gaus))
+```
+
+一様分布である（極限が）
+```{r}
+disk.rand <- cbind(runif(length(lambdas.gaus)*2)*2-1,runif(length(lambdas.gaus)*2)*2-1) # 正方形一様分布
+disk.rand <- disk.rand[which(apply(disk.rand^2,1,sum)<1),] # 円板上のみに限定
+disk.rand. <- disk.rand[1:length(lambdas.gaus),]
+# 以下のプロットが直線を作れば、円板一様分布と半径に関して相似な分布であることがわかる
+plot(sort(Mod(lambdas.gaus)),sort(sqrt(apply(disk.rand.^2,1,sum))))
+
+# 偏角に関して一様分布であることがわかる
+hist(Arg(lambdas.gaus))
+
+```
+
+#### Gaussian Hermite Ensemble
+
+対称化Gaussian Random Matrixの固有値は実数であり、その分布は半円型となる（極限が）
+
+
+```{r}
+plot(sort(lambdas.sym),pch=20,cex=0.1)
+hist(lambdas.sym)
+```
+
+#### 行列サイズで標準化
+
+
+行数の平方根で標準化すると、単位円板と同じになる。
+
+行数の半分の平方根で標準化するほうが普通らしい
+
+```{r}
+plot(sort(Mod(lambdas.gaus))/sqrt(n.mat),sort(sqrt(apply(disk.rand.^2,1,sum))))
+hist(lambdas.sym/sqrt(n.mat/2))
+```
+
+
+同じ数の固有値を、小さい行列で発生させると、「極限が」一様分布・半円分布になる、という意味が分かりやすい。
+
+実際、最小サイズの行列(1x1行列）の場合、固有値の分布は標準正規分布そのものになる。
+
+小さいnだと、密度分布が波打ち、ピークの数は、行列サイズ(行数)となる。
+
+実際、行列サイズに対する密度分布の式表現が知られており、
+その1x1が正規分布、大きい方の極限が半円分布になっている。
+
+
+
+```{r}
+#n.mat <- 1000
+#n.iter <- 10
+n.mat <- 4 # n.mat x n.mat 行列
+n.iter <- 2500
+lambdas.gaus <- lambdas.sym <- c()
+for(i in 1:n.iter){
+  M <- my.GRM.cpx(n.mat,n.mat)
+  #M - my.GRM(n.mat,n.mat)
+  M2 <- (M + my.t(M))/2 # 共役転置
+  eigen.out.gaus <- eigen(M)
+  eigen.out.sym <- eigen(M2)
+  lambdas.gaus <- c(lambdas.gaus,eigen.out.gaus[[1]])
+  lambdas.sym <- c(lambdas.sym,eigen.out.sym[[1]])
+}
+```
+```{r}
+plot(lambdas.gaus,pch=20,cex=0.1,asp = TRUE)
+plot(sort(lambdas.sym),pch=20,cex=0.1)
+hist(lambdas.sym/sqrt(n.mat/2),breaks=100)
+```
+
+### Quater Circle Law (Marcenko-Pastur Law)
+
+* GRMの固有値分布の極限が複素平面円板分布であり
+* GRMに対称行列制約を課すと、固有値は実数になり、その分布関数が半円になる
+
+さらに行列に制約を課すと、固有値が正実数に限定され、その分布関数は、四半円となる。
+
+この四半円分布をQuater Circle Lawと言う。
+
+半円ルールが成立するのは対称行列の場合で、それを式で表すと正方GRM,A,とその共役転置行列 A* を使って以下のように表される行列
+
+$$
+\frac{A + A*}{2}
+$$
+
+四半円ルールが成立するのはm行n列GRM($m \ge n$), A, に対して$A^*$を使って以下のようにあらわされる正方行列を考える
+
+このような行列の集まりをLaguerre ensembleと呼ぶ
+
+
+
+$$
+A^* A /m
+$$
+
+対称行列と同様にRで試してみる
+
+
+
+分布の立ち上がりは0ではなく、n/m に依存した位置になる。
+
+n=mのときに立ち上がりは0になる。
+
+$A^* A$の正の固有値の平方根は$A$の特異値であるから、特異値の分布にも似たような分布が現れる
+
+特に、n=mのとき、Aの特異値の分布が0を立ち上がりとした四半円になる
+
+特異値と固有値との関連の確認
+```{r}
+m.mat <- 10
+n.mat <- 5
+K <- my.GRM.cpx(m.mat,n.mat)
+K. <- my.t(K) %*% K
+sqrt(eigen(K.)[[1]])
+svd(K)[[1]]
+```
+
+さて、実験
+
+かなり大型の行列でないと、山形の分布に収束しない。
+
+以下の例は、20000 * 2000
+
+
+```{r}
+n.mat <- 2000
+m.mat <- n.mat * 10
+n.iter <- 1
+#n.mat <- 4 # n.mat x n.mat 行列
+#n.iter <- 2500
+lambdas.lag<- c()
+svd.v <- c()
+for(i in 1:n.iter){
+  #M <- my.GRM.cpx(m.mat,n.mat)
+  M <- my.GRM(m.mat,n.mat)
+  M2 <- (my.t(M) %*% M)/m.mat # 共役転置
+  svd.out <- svd(M)
+  eigen.out <- eigen(M2)
+  lambdas.lag <- c(lambdas.lag,eigen.out[[1]])
+  svd.v <- c(svd.v,svd.out[[1]])
+}
+```
+```{r}
+plot(lambdas.lag,pch=20,cex=0.1)
+plot(sort(lambdas.lag),pch=20,cex=0.1)
+hist(lambdas.lag,breaks=100)
+plot(svd.v,pch=20,cex=0.1)
+plot(sort(svd.v),pch=20,cex=0.1)
+hist(svd.v,breaks=100)
+```
+
+m = n の例
+
+```{r}
+n.mat <- 2000
+m.mat <- n.mat * 1
+n.iter <- 1
+#n.mat <- 4 # n.mat x n.mat 行列
+#n.iter <- 2500
+lambdas.lag<- c()
+svd.v <- c()
+for(i in 1:n.iter){
+  #M <- my.GRM.cpx(m.mat,n.mat)
+  M <- my.GRM(m.mat,n.mat)
+  M2 <- (my.t(M) %*% M)/m.mat # 共役転置
+  svd.out <- svd(M)
+  eigen.out <- eigen(M2)
+  lambdas.lag <- c(lambdas.lag,eigen.out[[1]])
+  svd.v <- c(svd.v,svd.out[[1]])
+}
+```
+```{r}
+plot(lambdas.lag,pch=20,cex=0.1)
+plot(sort(lambdas.lag),pch=20,cex=0.1)
+hist(lambdas.lag,breaks=100)
+plot(svd.v,pch=20,cex=0.1)
+plot(sort(svd.v),pch=20,cex=0.1)
+hist(svd.v,breaks=100)
+```
+
+### そのほか
+
+最大固有値も特徴的な分布を取る
+
+### QR分解
+
+一般に、行列は三角化等をすると、計算が単純化され、かつ、行列自体の性質は維持できる。
+
+
+GRMの場合も、三角化をすることで、ばらつきの具合をかいつまんだ量がカイ統計量として対角成分に集まり、相変わらず、非対角成分は、正規分布に従うという
+
+対角成分は、第１対角成分から順に、自由度が行数から、行数-1,...,1のカイ分布に従う
+
+
+```{r}
+library(pracma)
+n.mat <- 100
+n.iter <- 1000
+diags <- matrix(0,n.iter,n.mat)
+for(i in 1:n.iter){
+  M <- my.GRM(n.mat,n.mat)
+
+  qr.out <- qr(M)
+
+  R <- qr.R(qr.out)
+  diags[i,] <- diag(R)
+}
+```
+
+```{r}
+# 上三角化
+image(Mod(R))
+# 上三角部は正規乱数
+hist(c(Re(R[upper.tri(R)]),Im(R[upper.tri(R)]))) # 上三角成分は正規分布
+
+x <- seq(from=0,to=20,length=1000)
+```
+対角成分は自由度が１ずつ変化したカイ分布に従う
+```{r}
+library(chi)
+
+par(mfrow = c(3,3))
+selected.for.plot <- c(1,n.mat,sample(2:(n.mat-1),7))
+for(i in 1:length(selected.for.plot)){
+  hist(abs(diags[,selected.for.plot[i]]),freq=FALSE)
+  chi.d <- dchi(x,df=n.mat-selected.for.plot[i]+1)
+  points(x,chi.d,type="l")
+}
+par(mfrow=c(1,1))
+```
+
+#### QR分解のQと昇順部分数列
+
+Qの固有値のモーメントと、順列中に現れる、部分昇順順列が最大のものの場合の数とには関係がある
+
