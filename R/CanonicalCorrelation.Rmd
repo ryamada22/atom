@@ -1,0 +1,115 @@
+---
+title: "正準相関解析 Canonical Correlation Analysis"
+author: "ryamada"
+date: "2019年8月2日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 複数の説明変数 vs. 複数の被説明変数
+
+* n個のサンプル
+* p個の説明変数$X; n \times p$
+* q個の被説明変数$Y; n \times q$
+
+Xのp個の列ベクトルとYのq個の列ベクトルとの関係を見る
+
+X,Yを、ともに
+r = min(p,q)個の次元に線形変換する。
+
+X -> U
+
+Y -> V
+
+とする。
+
+線形変換後の第１、第２、…、第ｒ軸のそれぞれが、「見るべき軸」で、
+
+U の第１軸と、Vの第１軸に、高い相関が固まるようになっている。
+
+軸の番号が上がるにつれ、相関が消えていく。
+
+UとVとの第i軸には相関が残るが、Uの第i軸と、Vの第j軸（$i \ne j$）の間には無相関になるようにする。
+
+結果として、X,Yをr次元に線形変換し、XとYとの間の相関が強い軸を無駄なく取り出していることになる。
+
+```{r}
+p <- 3
+q <- 2
+n <- 50
+X <- matrix(rnorm(p*n),ncol=p)
+Y <- matrix(rnorm(q*n),ncol=q)
+out <- stats::cancor(X,Y)
+```
+```{r}
+str(out)
+```
+ベーシックな関数 cancor()の出力はシンプル。
+
+U,Vも計算されていない。
+
+
+```{r}
+U <- X %*% out$xcoef
+V <- Y %*% out$ycoef
+```
+
+U,Vの相関行列の対角成分が、cancor()関数の出力のcorの２成分。
+
+相関行列の非対角成分は0になっている。
+
+```{r}
+print(out$cor)
+cor(U,V)
+```
+
+### candiscパッケージのcancor()関数
+
+candiscパッケージにもcancor()関数があり、出力にいろいろな情報が含まれている。
+
+U,Vも出してくれる。
+
+また、結果のプロット関数もついている。
+
+```{r}
+# install.packages("candisc")
+library(candisc)
+out.candisc <- cancor(X,Y)
+```
+```{r}
+str(out.candisc)
+```
+
+U,Vの軸ごとの相関係数は同じ
+```{r}
+out$cor
+out.candisc$cancor
+```
+
+U,Vへの変換行列はちょっと違うが、
+```{r}
+out$xcoef
+out.candisc$coef[[1]]
+```
+
+
+定数倍の違いであることが分かる
+```{r}
+out$xcoef[,1:min(p,q)]/out.candisc$coef[[1]]
+out$ycoef[,1:min(p,q)]/out.candisc$coef[[2]]
+```
+
+Uも平均が0になるように調整されていることが分かる
+```{r}
+# 変換行列から計算
+U.candisc <- X %*% out.candisc$coef[[1]]
+# candisc::cancor()関数の出力としてのU
+U.candisc.out <- out.candisc$scores[[1]]
+plot(U.candisc[,1],U.candisc.out[,1])
+abline(0,1,col=2)
+plot(U.candisc[,1]-mean(U.candisc[,1]),U.candisc.out[,1])
+abline(0,1,col=2)
+```
