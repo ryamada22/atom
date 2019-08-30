@@ -7,7 +7,7 @@
 * [R、Rstudioをインストール](https://qiita.com/hujuu/items/ddd66ae8e6f3f989f2c0)
 * スライド上映形式の講義ではありません
 * 必死でノートを取りましょう
-* [公開資料](https://github.com/ryamada22/atom/blob/master/KurumeLecture/KL2019/KL2019Final.pdf)をプリントアウトして、それに書き込むというのもよい方法です
+* [公開資料](https://github.com/ryamada22/atom/blob/master/KurumeLecture/KL2019/KL2019/KL2019Final.pdf)をプリントアウトして、それに書き込むというのもよい方法です
 
 
 ## スケジュール
@@ -69,11 +69,12 @@
 
 ### 読み物
 
-* [多型](https://ja.wikipedia.org/wiki/%E5%A4%9A%E5%9E%8B)
+* [多型](https://ja.wikipedia.org/wiki/多型)
 
 
 ## 3-1 p値と検定
-* [参考スライド](http://www.statgenet.med.kyoto-u.ac.jp/wiki_tokyo/index.php/%E6%97%A5%E6%9C%AC%E4%BA%BA%E9%A1%9E%E9%81%BA%E4%BC%9D%E5%AD%A6%E4%BC%9A%E6%95%99%E8%82%B2%E8%AC%9B%E6%BC%94_p%E5%80%A4%E3%81%8B%E3%82%89%E8%80%83%E3%81%88%E3%82%8B%E3%82%B2%E3%83%8E%E3%83%A0%E7%96%AB%E5%AD%A6%E8%A7%A3%E6%9E%90%E6%89%8B%E6%B3%95)(3-1～6-2)
+
+* [参考スライド](http://www.statgenet.med.kyoto-u.ac.jp/wiki_tokyo/index.php/日本人類遺伝学会教育講演_p値から考えるゲノム疫学解析手法)(3-1～6-2)
 
 ```{r}
 # 一様分布からの乱数発生
@@ -83,8 +84,11 @@ plot(r)
 hist(r)
 plot(sort(r))
 ```
+
 ## 3-2 解析の再現性とRmarkdown
+
 * [Rstudio](https://qiita.com/hujuu/items/ddd66ae8e6f3f989f2c0)
+
 * R,reproducibility,再現性でウェブ検索して情報を集めてみる
 * この講義のノートを書いてみる。うまく行かなければコピーペーストしてから考える
 
@@ -169,7 +173,9 @@ my.exact.prob(tab2)
 ```{r}
 fisher.test(tab)
 ```
+
 ## 5-1 SNVだけで学ぶ統計学　イントロダクション
+
 [スライド](http://www.statgenet.med.kyoto-u.ac.jp/wiki_tokyo/index.php/%E6%97%A5%E6%9C%AC%E4%BA%BA%E9%A1%9E%E9%81%BA%E4%BC%9D%E5%AD%A6%E4%BC%9A%E6%95%99%E8%82%B2%E8%AC%9B%E6%BC%94_p%E5%80%A4%E3%81%8B%E3%82%89%E8%80%83%E3%81%88%E3%82%8B%E3%82%B2%E3%83%8E%E3%83%A0%E7%96%AB%E5%AD%A6%E8%A7%A3%E6%9E%90%E6%89%8B%E6%B3%95)
 
 ## 5-2 アレル、ディプロタイプ、ハーディワインベルグ平衡
@@ -189,7 +195,9 @@ fisher.test(tab)
 
 
 ## 6-1 ケースコントロール・スタディ 2x3表
+
 [スライド](http://www.statgenet.med.kyoto-u.ac.jp/wiki_tokyo/index.php/%E6%97%A5%E6%9C%AC%E4%BA%BA%E9%A1%9E%E9%81%BA%E4%BC%9D%E5%AD%A6%E4%BC%9A%E6%95%99%E8%82%B2%E8%AC%9B%E6%BC%94_p%E5%80%A4%E3%81%8B%E3%82%89%E8%80%83%E3%81%88%E3%82%8B%E3%82%B2%E3%83%8E%E3%83%A0%E7%96%AB%E5%AD%A6%E8%A7%A3%E6%9E%90%E6%89%8B%E6%B3%95)
+
 ## 6-2 ケースコントロール・スタディ 2x3表
 引き続きスライド
 
@@ -205,7 +213,7 @@ fisher.test(tab)
 * k:n-kになる確率は？
 
 $$
-n_C_k p^k (1-p)^{n-k}
+_n C_k p^k (1-p)^{n-k}
 $$
 
 ### 尤度
@@ -536,7 +544,7 @@ plot(X,col=cl2[[1]])
 
 ## 13-2 ネットワークというグラフ
 
-[https://ja.wikipedia.org/wiki/%E3%82%B0%E3%83%A9%E3%83%95_(%E3%83%87%E3%83%BC%E3%82%BF%E6%A7%8B%E9%80%A0)](グラフ)とは
+[グラフ](https://ja.wikipedia.org/wiki/グラフ)とは
 
 ### 特別なグラフ～木グラフ
 * 階層的クラスタリングの出力は木グラフ
@@ -590,6 +598,9 @@ d2[which(d2 >= mean.d/4)] <- 0
 g <- graph.adjacency(d2)
 plot(g)
 ```
+
 ## 14-1は予備。きっと時間が足りなくなるから
+
 ## 14-2は予備。きっと時間が足りなくなるから
+
 ## 15-1,15-2 試験・試験
