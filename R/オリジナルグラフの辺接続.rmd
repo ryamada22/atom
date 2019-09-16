@@ -1,0 +1,661 @@
+---
+title: "3正則閉多面体グラフの角度情報付き辺接続複素行列の*-代数"
+author: "ryamada"
+date: "2019年6月28日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(rgl)
+knit_hooks$set(webgl = hook_webgl)
+```
+
+## 3正則閉多面体グラフ
+
+三角形のみでできた閉多面体の双対グラフGは、すべての次数が3である閉多面体となる。
+
+このGの辺をある向きに取ると、その有向辺の終点から逆戻りせずに進む有向辺が2本ある。
+
+2本の有向辺のうち、1本は多角形を時計回りに回るタイプであり、もう1本は多角形を反時計回りに回るタイプである。
+
+## 3正則閉多面体グラフの部分領域の切り取りと展開図
+
+Gが作る閉多面体の一部を辺に沿って切り取り、一塊として取り出す操作を考える。
+
+この操作により、Gは２つの部分に分かれる。
+
+切り取りの鋏の進め方により、２つの部分のうち、片方は時計回りに辺縁を回り(向かって右Right側のエッジを選ぶ)、もう片方は反時計回りに辺縁を回った(向かって左Left側のエッジを選ぶ)ものとして、取り出される。
+
+この切り取りは、グラフ上で向きのあるサイクルに相当する。
+
+ある切り取りを$c$とする。
+
+この$c$によって取り出される、時計回りの閉多面体の部分を$R_c$、半時計周りの閉多面体の部分を$L_c$と呼ぶことにする。
+
+$R_c,L_c$は、うまく平面上に伸展できる場合もあれば、そうでない場合もある。
+
+閉多面体の展開図というのは、閉多面体のすべての多角形が非連結となることなく、平面上に伸展できる状態である。
+
+従って、切り取りの操作を繰り返して、平面上に伸展できる部分のみとなるまでばらし、バラバラにした伸展ピースの共有辺１本で張り合わし戻したものが展開図であるとも言える。
+
+## エッジの選び方と角度変化
+
+$R_c,L_c$が平面伸展できるかどうかを考えるためには、以下のようなことを考える必要がある。
+
+* $R_c,L_c$の接続する2辺とそれらのそれぞれが構成する多角形($R_c,L_c$に含まれる多角形)２つのみを対象にすれば、その２つの多角形はかならず平面伸展可能である
+* この平面伸展した状態において、2辺には進行方向の角度変化がある
+* この角度変化は、同じ2辺の接続に関して$R_c$の場合と$L_c$の場合とで角度が異なる
+* また、$R_c$の角度変化と$L_c$の角度変化の和は、一般には0ではない
+* 平面伸展できる$R_c,L_c$が得られるのは、この角度変化の累和が$\pm 2 \pi$になることが必要である
+* 逆に、サイクルをたどって角度変化の累和を取ったときに、$\pm 2 \pi$となっていなければ、$R_c,L_c$は、平面伸展できないこととなる
+
+## 閉多面体の切り取りとその角度変化を表す行列の作成
+
+4つの行列が必要である。
+
+* 接続辺として、右側を採用したときに、$R_c$を進展したとして測る角度変化の行列$WR4R$
+* 接続辺として、右側を採用したときに、$L_c$を進展したとして測る角度変化の行列$WR4L$
+* 接続辺として、右側を採用したときに、$R_c$を進展したとして測る角度変化の行列$WL4R$
+* 接続辺として、右側を採用したときに、$R_c$を進展したとして測る角度変化の行列$WL4L$
+
+```{r}
+# 頂点IDを1,2,3,...,k+2,としたときに
+# 三角形メッシュの各三角形の頂点IDを時計回りに並べたものを行とした
+# 3列行列 fを引数とし、
+# その双対グラフの４通りの行列WR4R, WR4L, WL4R,WL4Lを返す関数
+
+
+# f is a 3-column matrix
+# Each row of f has 3 node ids in clockwise rotation
+# node id should start from 1 and end with the number of nodes
+# L.sort is the option to make the edges in two direction of the same edge should have their id numbers as 2i-1 and 2i
+
+# Wc4c.cpx = WR4R, Wc4d.cpx = WR4L, Wd4c.cpx = WL4R, Wd4d.cpx = WL4L
+
+my.W.cpx <- function(f,L.sort=FALSE){
+  F <- matrix(1:(length(f[,1])*3),byrow=TRUE,ncol=3)
+  EL <- my.EfromF(f)
+  E.pair <- my.Epair(EL)
+  RL <- my.permMat(F,EL,E.pair)
+  # RL出力から、双対グラフの時計回り接続行列を作る
+  Wc <- RL$L %*% RL$R
+# 双対グラフの反時計回り接続行列を作る
+  Wd <- RL$L %*% t(Wc) %*% RL$L
+# 行・列入れ替え
+  s <- sample(1:length(Wc[,1]))
+  S <- diag(length(s))[,s]
+  Wc. <- S %*% Wc %*% t(S)
+  Wd. <- S %*% Wd %*% t(S)
+# 双対グラフのゼータ関数向けの接続行列を作る
+  We <- Wc + Wd
+  We. <- Wc. + Wd. 
+  
+  # 複素行列
+  # このWc.cpx,Wd.cpxは、時計回りに部分を切り取るときに、時計回りエッジを選択する場合と
+  # 反時計回りに部分を切り取るときに、反時計回りエッジを選択する場合
+  ret.steps <- my.return.step(Wc)
+  Wc.cpx <- my.complex.W(Wc,counterclockwise=FALSE)
+  #Wd.cpx <- my.complex.W(Wd,counterclockwise=FALSE)
+  Wd.cpx <- RL$L %*% t(Conj(Wc.cpx)) %*% RL$L
+  
+  opp.cpx <- my.complex.W.opp(Wc.cpx,Wd.cpx,RL$L)
+  
+  # 4行列を追合関係の２行列にする
+  ZeroMat <- matrix(0,length(Wc.cpx[,1]),length(Wc.cpx[,1]))
+  W <- rbind(cbind(Wc.cpx,ZeroMat),cbind(ZeroMat,opp.cpx$Wc4d))
+  W.star <- rbind(cbind(opp.cpx$Wd4c,ZeroMat),cbind(ZeroMat,Wd.cpx))
+  if(L.sort){
+    SS <- my.L.sort(RL$L)
+    WR4R=t(SS) %*% Wc.cpx %*% SS
+    WL4L=t(SS) %*% Wd.cpx %*% SS
+    WR4L = t(SS) %*% opp.cpx$Wc4d %*% SS
+    WL4R = t(SS) %*% opp.cpx$Wd4c %*% SS
+    # 4行列を追合関係の２行列にする
+  ZeroMat <- matrix(0,length(Wc.cpx[,1]),length(Wc.cpx[,1]))
+  W <- rbind(cbind(WR4R,ZeroMat),cbind(ZeroMat,WR4L))
+  W.star <- rbind(cbind(WL4R,ZeroMat),cbind(ZeroMat,WL4L))
+    return(list(Wc=t(SS) %*% Wc %*% SS,Wd=t(SS) %*% Wd %*% SS,We=t(SS) %*% We %*% SS,Wc.=t(SS) %*% Wc. %*% SS, Wd.=t(SS) %*% Wd. %*% SS,We.=t(SS) %*% We. %*% SS,WR4R=WR4R, WL4L=WL4L, WR4L=WR4L,WL4R = WL4R,W = W, W.star = W.star , R = t(SS) %*% RL$R %*% SS , L = t(SS) %*% RL$L %*% SS,F=F,EL=EL,E.pair=E.pair))
+  }else{
+    return(list(Wc=Wc,Wd=Wd,We=We,Wc.=Wc.,Wd.=Wd.,We.=We.,WR4R=Wc.cpx,WL4L=Wd.cpx,WR4L = opp.cpx$Wc4d, WL4R = opp.cpx$Wd4c, W=W, W.star = W.star,R = RL$R, L = RL$L,F=F,EL=EL,E.pair=E.pair))
+  }
+  
+}
+```
+
+以下は、ユーティリティ関数。
+knit後のファイルには表示されない。
+
+確認はRmdファイルで。
+
+```{r,echo=FALSE}
+# 雑な関数ではあるが
+# 行列のn乗を返す関数
+
+# power of Matrix
+my.powM <- function(M,n){
+	d <- length(M[,1])
+	ret <- diag(d)
+	for(i in 1:n){
+		ret <- ret %*% M
+	}
+	return(ret)
+}
+my.powM2 <- function(M,n){
+  eigen.out <- eigen(M)
+  tmp <- solve(eigen.out[[2]])
+  eigen.out[[2]] %*% diag(eigen.out[[1]]^n) %*% tmp
+  
+}
+# 行列のトレースを返す
+# Trace of matrix
+my.trace <- function(M){
+	sum(diag(M))
+}
+
+# 適当に三角メッシュ平面グラフの情報を返す
+# fは、頂点のトリオを時計回り(反時計回りと見なしても良い)に並べた行からなる３列行列
+# Fの各行に向きのある辺の番号を与えたものとしてい作った３列行列
+
+# generates a random triangular planar graph information
+# F is a matrix with 3 columns; each row has three integers that represent three edges that are in the order of clockwise rotation (or you can consider the order as counterclockwise.)
+# Returned values = F and f
+# F's row is just a three numbers of each triangle.
+# f is a matrix whose each row is consisted of three vertex ids in clockwise rotation order.
+my.rtri <- function(n){
+	f <- matrix(1:3,ncol=3)
+	f <- rbind(f,3:1)
+	for(i in 1:n){
+		s <- sample(1:length(f[,1]),1)
+		v <- max(f) + 1
+		sf <- f[s,]
+		f <- f[-s,]
+		f <- rbind(f,c(sf[1:2],v))
+		f <- rbind(f,c(sf[2:3],v))
+		f <- rbind(f,c(sf[c(3,1)],v))
+	}
+	F <- matrix(1:(length(f[,1])*3),byrow=TRUE,ncol=3)
+	return(list(f=f,F=F))
+}
+
+# ３角形の頂点情報から、エッジリストを作る
+# my.rtri()関数の出力の$fから作る
+# エッジの並び順は、my.rtri()関数の出力の$Fとうまく合致するように並べ替えて出力してある
+# The function makes an edgelist with direction
+my.EfromF <- function(f){
+	el <- rbind(f[,1:2],f[,2:3],f[,c(3,1)])
+	tmp <- matrix(1:length(el[,1]),ncol=3)
+	el <- el[c(t(tmp)),]
+	return(el)
+}
+
+# 向きの違うエッジのペアを、my.EfromF()関数の出力での行番をエッジＩＤと見なして返す
+# The return is two-column matrix and each row is the number of edges paring in mutually opposite direction.
+my.Epair <- function(el){
+	s.el <- apply(el,1,sort)
+	mv <- max(el)+1
+	V <- s.el[1,] * mv + s.el[2,]
+	tmp <- outer(V,V,"-")
+	diag(tmp) <- 1
+	pairs <- which(tmp==0,arr.ind=TRUE)
+	return(pairs)
+}
+
+# 三角メッシュの各面の接続に相当する行列Ｒと
+# 逆向きエッジ対応に相当する行列Ｌとを返す
+
+# This function returns two square matrices, R and L
+# R %*% L is the edge-connection matrix of clockwise rotation
+my.permMat <- function(F,EL,E.pair){
+	n <- length(E.pair[,1])
+	R <- matrix(0,n,n)
+	trio.mat <- matrix(0,3,3)
+	trio.mat[1,2] <- trio.mat[2,3] <- trio.mat[3,1] <- 1
+	for(i in 1:length(F[,1])){
+		R[F[i,],F[i,]] <- trio.mat
+	}
+	L <- matrix(0,n,n)
+	for(i in 1:length(E.pair[,1])){
+		el1 <- EL[E.pair[i,1],]
+		el2 <- EL[E.pair[i,2],]
+		tmp1 <- which(apply((t(EL) - el1)^2,2,sum)==0)
+		tmp2 <- which(apply((t(EL) - el2)^2,2,sum)==0)
+		
+		L[tmp1,tmp2] <- 1
+	}
+	return(list(R=R,L=L))
+}
+
+# 何歩で戻るかを列挙する関数
+my.return.step <- function(Wc){
+  returned <- list()
+  for(i in 1:length(Wc[,1])){
+    returned[[i]] <- 0
+  }
+  for(i in 1:length(Wc[,1])){
+    tmp <- diag(my.powM(Wc,i))
+    if(sum(tmp)>0){
+      for(j in which(tmp==1)){
+        returned[[j]] <- c(returned[[j]],i)
+      }    
+    }
+  }
+  returned. <- lapply(returned,function(x){x[-1]})
+  returned.  
+}
+# 何歩で戻るかの情報で、Wc行列を複素行列化
+# この関数は、時計回りに部分を切り取るときに、時計回りエッジを選択する場合と
+# 反時計回りに部分を切り取るときに、反時計回りエッジを選択する場合
+my.complex.W <- function(Wc,counterclockwise=TRUE){
+  returned <- my.return.step(Wc)
+  tmp <- sapply(returned,min)
+  ret <- Wc
+  pm <- 1
+  if(!counterclockwise){
+    pm <- -1
+  }
+  for(i in 1:length(tmp)){
+    val <- exp(pm * 1i * 1/tmp[i]*2*pi)
+    loc <- which(ret[i,]==1)
+    ret[i,loc] <- val 
+  }
+  return(ret)
+}
+# この関数は、時計回りに部分を切り取るときに、反時計回りエッジと選ぶ場合と
+# 反時計回りに部分を切り取るときに、時計回りエッジを選ぶ場合
+# Wc,Wdは時計回り・反時計回りの複素行列,Pはエッジ対応行列
+my.complex.W.opp <- function(Wc,Wd,P){
+  Wd4c <- Wd # clockwiseに切り取るときのdエッジ選択
+  for(i in 1:length(Wc[,1])){
+    tmpd <- which(Wd[i,] != 0)
+    tmpc <- which(Wc[i,] != 0)
+    counter <- which(P[tmpc,] != 0)
+    tmpc2 <- which(Wc[counter,] != 0)
+    #print(Wc[i,tmpc])
+    #print(Wc[counter,tmpc2])
+    #print("0000")
+    Wd4c[i,tmpd] <- Wc[i,tmpc] * Wc[counter,tmpc2] / exp(1i * pi)
+  }
+  Wc4d <- P %*% t(Conj(Wd4c)) %*% t(P)
+  return(list(Wd4c=Wd4c,Wc4d=Wc4d))
+}
+
+# 有向辺のペアをあらわした行列Lを引数にして、(1,2),(2,3),...とそろえるために、エッジの番号付けを変換するための置換行列を返す関数
+my.L.sort <- function(L){
+	pairs <- which(L==1,arr.ind=TRUE)
+	pairs <- pairs[which(pairs[,1]<pairs[,2]),]
+	sfl <- c(t(pairs))
+	SS <- diag(length(sfl))[,sfl]
+	return(SS) # t(SS) %*% L %*% SS is the sorting calculation
+}
+
+# ランダムに三角形planar graphを作り、それに関する辺接続行列等を返す関数
+my.rTriRL <- function(n.tri,L.sort=FALSE){
+  F <- my.rtri(n.tri)
+  EL <- my.EfromF(F$f)
+  E.pair <- my.Epair(EL)
+  RL <- my.permMat(F$F,EL,E.pair)
+  # RL出力から、双対グラフの時計回り接続行列を作る
+  Wc <- RL$L %*% RL$R
+# 双対グラフの反時計回り接続行列を作る
+  Wd <- RL$L %*% t(Wc) %*% RL$L
+# 行・列入れ替え
+  s <- sample(1:length(Wc[,1]))
+  S <- diag(length(s))[,s]
+  Wc. <- S %*% Wc %*% t(S)
+  Wd. <- S %*% Wd %*% t(S)
+# 双対グラフのゼータ関数向けの接続行列を作る
+  We <- Wc + Wd
+  We. <- Wc. + Wd. 
+  
+  # 複素行列
+  # このWc.cpx,Wd.cpxは、時計回りに部分を切り取るときに、時計回りエッジを選択する場合と
+  # 反時計回りに部分を切り取るときに、反時計回りエッジを選択する場合
+  ret.steps <- my.return.step(Wc)
+  Wc.cpx <- my.complex.W(Wc,counterclockwise=FALSE)
+  #Wd.cpx <- my.complex.W(Wd,counterclockwise=FALSE)
+  Wd.cpx <- RL$L %*% t(Conj(Wc.cpx)) %*% RL$L
+  
+  opp.cpx <- my.complex.W.opp(Wc.cpx,Wd.cpx,RL$L)
+  
+  # 4行列を追合関係の２行列にする
+  ZeroMat <- matrix(0,length(Wc.cpx[,1]),length(Wc.cpx[,1]))
+  W <- rbind(cbind(Wc.cpx,ZeroMat),cbind(ZeroMat,opp.cpx$Wc4d))
+  W.star <- rbind(cbind(opp.cpx$Wd4c,ZeroMat),cbind(ZeroMat,Wd.cpx))
+  
+  if(L.sort){
+    SS <- my.L.sort(RL$L)
+    Wc4c.cpx=t(SS) %*% Wc.cpx %*% SS
+    Wd4c.cpx=t(SS) %*% Wd.cpx %*% SS
+    Wc4d.cpx = t(SS) %*% opp.cpx$Wc4d %*% SS
+    Wd4c.cpx = t(SS) %*% opp.cpx$Wd4c %*% SS
+    
+    # 4行列を追合関係の２行列にする
+    W <- rbind(cbind(Wc4c.cpx,ZeroMat),cbind(ZeroMat,Wc4d.cpx))
+  W.star <- rbind(cbind(Wd4c.cpx,ZeroMat),cbind(ZeroMat,Wd4c.cpx))
+    
+    return(list(Wc=t(SS) %*% Wc %*% SS,Wd=t(SS) %*% Wd %*% SS,We=t(SS) %*% We %*% SS,Wc.=t(SS) %*% Wc. %*% SS, Wd.=t(SS) %*% Wd. %*% SS,We.=t(SS) %*% We. %*% SS,Wc4c.cpx=Wc4d.cpx ,Wd4d.cpx=Wd4d.cpx,Wc4d.cpx = Wc4d.cpx, Wd4c.cpx = Wdec.cpx, W = W, W.star = W.star,R = t(SS) %*% RL$R %*% SS , L = t(SS) %*% RL$L %*% SS,F=F,EL=EL,E.pair=E.pair))
+  }else{
+    return(list(Wc=Wc,Wd=Wd,We=We,Wc.=Wc.,Wd.=Wd.,We.=We.,Wc4c.cpx=Wc.cpx,Wd4d.cpx=Wd.cpx,Wc4d.cpx = opp.cpx$Wc4d, Wd4c.cpx = opp.cpx$Wd4c, W=W,W.star=W.star,R = RL$R, L = RL$L,F=F,EL=EL,E.pair=E.pair))
+  }
+  
+}
+```
+
+## 例
+
+
+```{r}
+n.tri <- 20
+F1 <- my.rtri(n.tri)
+f1 <- F1$f
+out1 <- my.W.cpx(f1)
+```
+```{r}
+R <- out1$R
+L <- out1$L 
+my.RLR <- function(R,L,k){
+  RL <- R %*% L
+  my.powM2(RL,k) %*% R 
+}
+tmp.K <- 100
+RLR <- list()
+RLR[[1]] <- R
+cumsum.RLR <- list()
+cumsum.RLR[[1]] <- RLR[[1]]
+for(i in 2:tmp.K){
+  RLR[[i]] <- my.RLR(R,L,i-1)
+  cumsum.RLR[[i]] <- cumsum.RLR[[i-1]] + RLR[[i]]
+  if(max(abs(sign(Re(cumsum.RLR[[i-1]]))-sign(Re(cumsum.RLR[[i]])))) < 10^(-6)){
+    break
+  }
+}
+```
+
+```{r}
+WWc <- sign(Re(cumsum.RLR[[length(cumsum.RLR)]]))
+for(i in 1:length(L[,1])){
+  tmp <- which(L[i,]==1)
+  #print(WWc[i,tmp])
+  WWc[i,tmp] <- WWc[tmp,i] <- 0
+}
+WWd <- L %*% t(WWc) %*% L # WWc = WWd
+WW <- sign(WWc + WWd) # WW = WWc = WWd
+range(WW)
+```
+```{r}
+eigen.out <- eigen(WW)
+# 対称行列なので、固有値は実数
+
+plot(sort(Re(eigen.out[[1]])))
+```
+```{r}
+for(i in 1:10){
+  print(sum(diag(my.powM2(WW,i))))
+}
+```
+
+```{r}
+n <- length(out1$Wc[,1])
+n
+W <- out1$W
+W.star <- out1$W.star 
+Wc <- out1$Wc 
+Wd <- out1$Wd
+```
+
+WとW.starとが作りうる全順列について計算するのは重過ぎる
+```{}
+# 重すぎる
+cmpx.mmt <- list()
+WW <- list(W,W.star)
+for(i in 1:n){
+  n.row <- 2^i
+  cmpx.mmt[[i]] <- matrix(0,n.row,2*n)
+  cmb <- expand.grid(rep(list(1:2),i))
+  
+  for(j in 1:n.row){
+    tmp <- diag(2*n)
+    for(k in 1:i){
+      tmp <- tmp %*% WW[[cmb[j,k]]]
+    }
+    cmpx.mmt[[i]][j,] <- diag(tmp)
+  }
+}
+```
+
+グラフ上は二分岐しているが、本当のところは「まっすぐ進む」ことを模したい、と考えるとどうなるだろうか、
+
+それは$(W \cdot W.star)^p$をすることである。
+
+ここで
+
+$W \cdot W.star$は、ユニタリ行列(共役転置行列が逆行列になっている）らしい
+
+代数的確率変数で、ユニタリ行列は、これまた、意味づけがあることと、「まっすぐに進みたい」という意図とがうまく符号するので、
+
+$(W \cdot W.star)^p$を考えることにする。
+
+以下のように、確かにユニタリ行列になっている
+```{r}
+WWstar <- W %*% W.star
+WcWd <- Wc %*% Wd
+# Unitary?
+range(Mod(diag(2*n)-WWstar %*% t(Conj(WWstar))))
+```
+
+$(W \cdot W.star)^p$の対角成分を記録しよう
+
+複素行列ではなく、成分が0,1のみの辺接続行列の場合の対角成分も同様に記録することにする。
+
+
+```{r}
+n.step <- length(WcWd[,1])
+eigen.out.WcWd <- eigen(WcWd)
+V1 <- eigen.out.WcWd[[2]]
+V1.solve <- solve(V1) 
+eigen.out.WWstar <- eigen(WWstar)
+V2 <- eigen.out.WWstar[[2]]
+V2.solve <- solve(V2)
+ret2 <- matrix(0,n.step,2*n)
+ret<- matrix(0,n.step,n)
+for(i in 1:n.step){
+  #tmp <- tmp %*% WWstar
+  ret2[i,] <- diag(V2 %*% diag(eigen.out.WWstar[[1]]^i) %*% V2.solve)
+  #tmp2 <- tmp2 %*% WcWd
+  ret[i,] <- diag(V1 %*% diag(eigen.out.WcWd[[1]]^i) %*% V1.solve)
+}
+```
+```{r}
+par(mfcol=c(1,3))
+image(Mod(ret2))
+image(Arg(ret2))
+image(Re(ret)) # 次元が半分なだけで、基本的に複素行列の場合と同じ
+par(mfcol=c(1,1))
+
+```
+
+サイクルが認めらる冪乗の確認
+
+```{r}
+nonzeros <- sort(unique(which(Mod(ret)>10^(-10),arr.ind=TRUE)[,1]))
+nonzeros2 <- sort(unique(which(Mod(ret2)>10^(-10),arr.ind=TRUE)[,1]))
+```
+
+サイクルができる場合も同一
+```{r}
+plot(nonzeros,type="h")
+plot(nonzeros,nonzeros2)
+```
+
+実際、トレースは実数になっていることもわかる
+
+```{r}
+range(Im(apply(ret2,1,sum)))
+```
+
+つまり、トレースは実数で、それがスペクトル
+
+0,1行列のスペクトルは、サイクル数を数えるだけなのに対して、
+複素行列の方はサイクルで戻ったときの、「角度」情報もある。
+
+
+```{r}
+plot(Re(apply(ret,1,sum)),type="l")
+plot(apply(Re(ret2),1,sum),type="l")
+```
+
+## トレースを連続関数としてみてみる
+```{r}
+t <- seq(from=0,to=max(nonzeros),length=100000)
+#t <- sort(c(t,nonzeros))
+retWcWd <- rep(0,length(t))
+retWWstar <- rep(0,length(t))
+
+for(i in 1:length(t)){
+  #retWWstar[i] <- sum(diag(my.powM2(WWstar,t[i])))
+  #retWcWd[i] <- sum(diag(my.powM2(WcWd,t[i])))
+  retWWstar[i] <- sum(eigen.out.WWstar[[1]]^t[i])
+  retWcWd[i] <- sum(eigen.out.WcWd[[1]]^t[i])
+}
+```
+
+```{r}
+par(mfcol=c(1,2))
+plot(t,Re(retWcWd),type="l")
+plot(t,Re(retWWstar),type="l")
+
+
+par(mfcol=c(1,1))
+matplot(cbind(Re(retWcWd),Re(retWWstar)),type="l")
+```
+
+```{r}
+range(Im(retWWstar))
+```
+nonzerosでは整数・実数になっている
+```{r}
+rWcWd <- rep(0,length(nonzeros))
+rWWstar <- rep(0,length(nonzeros))
+
+for(i in 1:length(nonzeros)){
+  rWcWd[i] <- sum(eigen.out.WcWd[[1]]^nonzeros[i])
+  rWWstar[i] <- sum(eigen.out.WWstar[[1]]^nonzeros[i])
+}
+matplot(nonzeros,Re(cbind(rWcWd,rWWstar)),type="l")
+```
+```{r,webgl=TRUE}
+plot3d(t,Re(retWcWd),Im(retWcWd),type="l")
+spheres3d(nonzeros,Re(rWcWd),Im(rWcWd),radius=5,color=3)
+```
+```{r,webgl=TRUE}
+plot3d(t,Re(retWcWd),Im(retWcWd),type="l",col=gray(0.5))
+spheres3d(nonzeros,Re(rWcWd),Im(rWcWd),radius=5,color=3,alpha=0.2)
+points3d(t,Re(retWWstar),Im(retWWstar))
+spheres3d(nonzeros,Re(rWWstar),Im(rWWstar),radius=5,color=4)
+```
+```{r}
+plot(t,Re(retWWstar),type="l") 
+points(nonzeros,Re(rWWstar),pch=20,col=3) 
+```
+
+```{r}
+cycle.len <- round(Re(rWcWd))
+table(cycle.len)
+sum(table(cycle.len))
+length(Wc[,1])
+```
+
+```{r}
+
+```
+## *-代数であることの確認
+
+この行列の追合は、共役転置し、さらに、エッジペア関係に基づく行・列の置換と、$R_c,L_c$の組み合わせを変換対応する行・列の置換とからなる
+
+```{r}
+n.tri <- 4
+F1 <- my.rtri(n.tri)
+f1 <- F1$f
+out1 <- my.W.cpx(f1)
+
+F2 <- my.rtri(n.tri)
+f2 <- F2$f
+out2 <- my.W.cpx(f2)
+
+```
+
+
+```{r}
+W1 <- out1$W
+W.star1 <- out1$W.star
+W2 <- out2$W
+W.star2 <- out2$W.star
+```
+
+```{r}
+n <- length(W1[,1])
+A1 <- W1
+B1 <- W.star1
+A2 <- W2
+B2 <- W.star2
+
+```
+
+置換行列を定義しなおさないといけない。
+
+P1はいわゆる辺のペアリングに関する置換行列。
+
+P2は(1:n) <-> ((n+1):(2n))を入れ替える置換行列
+
+以下の関数が対合変換をする関数。
+
+```{r}
+my.ast2 <- function(A,P1,P2){
+	t(P2) %*% t(P1) %*% t(Conj(A)) %*% P1 %*% P2
+}
+```
+
+```{r}
+P1 <- matrix(0,n,n)
+P1[1:(n/2),1:(n/2)] <- out1$L
+P1[(n/2+1):(n),(n/2+1):(n)] <- out1$L
+
+P2 <- diag(n)[,c((n/2+1):(n),1:(n/2))]
+```
+
+### 辺接続行列の*関係
+```{r}
+A1. <- my.ast2(A1,P1,P2)
+range(Mod(A1.-B1))
+
+A2. <- my.ast2(A2,P1,P2)
+range(Mod(A2.-B2))
+```
+### 条件1
+```{r}
+tmp1 <- my.ast2(A1+A2,P1,P2) - (my.ast2(A1,P1,P2) + my.ast2(A2,P1,P2))
+range(Mod(tmp1))
+```
+
+### 条件2
+
+```{r}
+lambda <- rnorm(1) + 1i * rnorm(1)
+
+tmp2 <- my.ast2(lambda * A1,P1,P2) - Conj(lambda) * my.ast2(A1,P1,P2)
+range(Mod(tmp2))
+```
+### 条件3
+```{r}
+tmp3 <- my.ast2(A1 %*% A2, P1,P2) - my.ast2(A2,P1,P2) %*% my.ast2(A1,P1,P2)
+range(round(Mod(tmp3),5))
+```
+
+### 条件4
+```{r}
+A1. <- my.ast2(A1,P1,P2)
+tmp4 <- my.ast2(A1.,P1,P2) - A1
+range(Mod(tmp4))
+```
+

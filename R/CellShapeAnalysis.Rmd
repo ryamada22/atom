@@ -1,0 +1,67 @@
+---
+title: "Shape Space Analysis"
+author: "ryamada"
+date: "2019年9月8日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Steps of spherization, spherical harmonics decomposition and rotation invariant evaluation.
+
+* 3D object, $C_i$, has triangular mesh repreesntation, $T_{C_i}$.
+* Mean curvature flow spherized with $n_i$ steps. The sries of triangular mesh is obtained as ($T_{C_i} = T_{C_i}(n_i),T_{C_i}(n_i-1),....,T_{C_i}(1),T_{C_i}(0)= T_{S_2}$), where $S_2$ is a unit sphere.
+* Each $T_{C_i}(t), t=1,2,...$ has following distributions on $S_2$.
+    + (X coordinates, Y coordinates, Z coordinates)
+    + mean curvatture
+* The distribution should be decomposed into a set of spherical harmonics coefficents.
+    + $\mathbf{SH}(T_{C_i}(t))_X,\mathbf{SH}(T_{C_i}(t))_Y,\mathbf{SH}(T_{C_i}(t))_Z$,
+    + $\mathbf{SH}(T_{C_i}(t))_{mc}$,
+    + where $\mathbf{SH}(T_{C_i}(t))_{*} = \{SH(T_{C_i}(t))_m^l\}, l=0,1,2,...,m=-l,-l+1,...,0,...,l$
+* Rotation invariant evaluation should be performed with the following two methods.
+    + Layered invariant: $\mathbf{SH_L}(T_{C_i}(t))^l = \{SH_L(T_{C_i}(t))^l = \sqrt{\sum_{p=(-l)}^{l} (SH(T_{C_i}(t))_p^l)^2}\}$
+    + Its pairwise distance is : $D_{L}(T_{C_i}(t),T_{C_j}(t')) = D_{L}(T_{C_j}(t'),T_{C_i}(t)) = \sqrt{||\mathbf{SH_L}(T_{C_i}(t)) -\mathbf{SH_L}(T_{C_j}(t'))||^2}$.
+    + Althlooti invariant: Althlooti method determines the optimal rotation of $T_{C_i}(t)$ against $T_{C_j}(t')$ for arbitrary pairs of $T_{C_i}(t)$ and $T_{C_j}(t')$. The rotation is denoted by $R(T_{C_i}(t)|T_{C_j}(t'))$.
+    + Subsequently Althlooti invariant-dissimilarity is calculated for pairs as; $D_{AL}(T_{C_i}(t),T_{C_j}(t')) = D_{AL}(T_{C_j}(t'),T_{C_i}(t)) = \sqrt{||\mathbf{SH}(R(T_{C_i}(t)|T_{C_j}(t')) \times T_{C_i}(t)_{*})-\mathbf{SH}(T_{C_j}(t'))_{*}||^2}$
+    
+## Shape space analysis and trajectory analysis in shape space
+
+There are two shape spaces.
+
+* One is the space where rotation invariant is not cares and the placing of cells in the real-world 3D space is important. 
+    + The placing should be cared. For example Yusri-san's shape change tracking needs to trace the relative placings of cells and it should be based on this shape space. 
+    + Actually, Yusri-san's Frenet-Serret method handles the relative locations of cell series and it takes care the relative rotation invariant issue with the moving frames on the trajectory. 
+    + This is why placing of cells are not preprocessed before his procedure.
+    + Mean curvature distribution, $\mathbf{SH}(T_{C_i}(t))_{mc}$, should be used as coordinates of each cell.
+* The other is the space where rotation invariant is cares and shapes themselves are the targets.
+    + $D_L$ and $D_{AL}$ should be cares.
+    + $\mathbf{SH_L}(T_{C_i}(t))^l_{mc}$ is used as coorinates. Again, mean curvature distibution on the unit sphere should be used. This is nice because each cell has coorinates with rotation invariant. However $mathbf{SH_L}$ loses many information of shapes and it is imperfect.
+    + On the contrary Althlooti-based rotation invariant approach does not loose shape information. However, Althlooti-method does not give coordinates for each cell directly but it gives pairwise dissimilarity matrix.
+    + The Althlooti dissimilarity matris is not Eucledian, the embedding of the cells is the issue. The rotation-invariant shape space is the space where rotation-equivalence makes the space as quotinent and the space is not Eucledian.
+    + Although the space is not Eucledian, somehow we can give coodinates to every cell, $\mathbf{EmbedAL}(C_i)(t)$.
+
+## Spherization series analysis in shape space
+
+Now we have multiple coodinates for each cell:
+
+* $\mathbf{SH}(T_{C_i}(t))_{mc}$
+* $\mathbf{SH_L}(T_{C_i}(t))_{mc}$
+* $\mathbf{EmbedAL}(C_i)(t)_{mc}$
+
+
+### Spherization steps should be standardized
+
+* All cells and their spherization series are represented as points in each coodinate system.
+* A series of cells along the spherization process is parameterized with spherization steps, $0,1,2,...,n_i$.
+* The series of cells are curves in each coordinate system.
+* The initial step from step 0 to step 1 determines the curve, that means all cells can be parameterized with the direction of coodinate change from step 0 to step 1 and number of steps.
+* Now we define the direction unit vector $\mathbf{Dir}(T_{C_i}) =\frac{\mathbf{XX}(T_{C_i}(1)_{mc} - \mathbf{XX}(T_{C_i}(0)_{mc})}{\sqrt{|| \mathbf{XX}(T_{C_i}(1)_{mc} - \mathbf{XX}(T_{C_i}(0)_{mc}) ||^2}}$, where $XX$ stands for one of three coodinates.
+* The number of steps should be modified along with the standardization of the direction, as $k \to k \times \sqrt{|| \mathbf{XX}(T_{C_i}(1)_{mc} - \mathbf{XX}(T_{C_i}(0)_{mc}) ||^2}, k = 0,1,2,...,n_i$. 
+
+
+
+
+
+    
