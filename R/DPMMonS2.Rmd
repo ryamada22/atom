@@ -1,0 +1,504 @@
+---
+title: "球面上のディリクレ過程混合正規分布乱点発生"
+author: "ryamada"
+date: "2019年9月2日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(rgl)
+knit_hooks$set(webgl = hook_webgl)
+```
+
+
+## 球面上の乱点発生を、無限次元ノンパラメトリックに行う
+
+[Dirichlet Process Mixture Model for Spherical Data](https://www.researchgate.net/publication/276204942_A_Dirichlet_Process_Mixture_Model_for_Spherical_Data)
+
+このペイパーが採用している方法を用いる。
+
+同法をかいつまんでいかに示す。
+
+* Stick-breaking法により、無限カテゴリ数にランダムな頻度を与える
+* 発生するべき乱点の帰属カテゴリを、無限カテゴリの多項分布からランダムに定める
+* 個々のカテゴリは２次元正規分布から発生させる。ただし、その２次元正規分布は球面上の点を中心とし、その中心点における球面の接平面における２次元正規分布とし、あるルールで球面上に射影することとする。ここで必要になるのは、中心を与える球面一様乱点と、２次元正規分布を定める逆ウィシャート分布からのランダム行列と、それらによって決まる２次元正規乱数である
+
+## 実際の乱点発生プラン
+
+* N点発生するとする。
+* Stick-breaking法によるカテゴリ数はN種類発生させておけば十分だろう
+* 有限カテゴリ数の頻度ベクトルができたので、そこからN個の多項分布サンプリングをする
+* Nカテゴリ用のN個の中心点を一様ランダム発生する
+* Nカテゴリ用のN個の逆Wishart分布ランダム行列を発生する
+* ２次元正規乱数を、発生する
+* 球面にマップして球面上の点とする
+
+```{r}
+library(dirichletprocess)
+
+N <- 1000
+alpha <- 5
+s <- StickBreaking(alpha,N)
+plot(cumsum(s))
+sum(s) # 1
+```
+
+### カテゴリを発生
+```{r}
+z <- sample(1:N,N,replace=TRUE,prob=s)
+plot(z)
+t <- table(z)
+# もしくは
+t <- rmultinom(1,N,prob=s)
+plot(t,type="h")
+sum(t) # Nに一致
+```
+
+### N個のカテゴリの中心点と分散共分散行列とを発生する
+
+N個の単位球面上一様乱点を発生し、それを、混合正規分布の構成要素の「正規分布の中心」とする。
+
+```{r}
+my.runifS2 <- function(n){
+	X <- matrix(rnorm(n*3),ncol=3)
+	X <- X/sqrt(apply(X^2,1,sum))
+	return(X)
+}
+mus <- my.runifS2(N)
+```
+
+
+2次元正規分布を定めるためには、２ｘ２の正定値行列を与える必要がある。
+
+この正定値行列もランダムに発生させたい。
+
+逆Wishart分布からランダム行列発生法というのがある。
+
+以下では、MCMCpackのrwish()関数を用いて発生している。
+
+２つの引数、自由度dfと２ｘ２行列mとを与えている。
+
+個々の正規分布が単位球面上で比較的まとまっているためには、この行列(分散共分散情報)は小さめの分散を指定することが要求される。
+```{r}
+library(MCMCpack)
+sigmas <- list()
+df <- 3
+m <- matrix(c(1,0,0,1),2,2) * 0.01
+for(i in 1:N){
+  sigmas[[i]] <- rwish(df,m)
+}
+```
+
+### 原点を中心とした２次元正規乱数
+
+ユークリッド2D平面における原点中心の正規分布を発生し、対応する接面上の点とし、後述する方法で単位球面に写像する。
+
+まずは、ユークリッド平面上の乱点を発生させる。
+
+```{r}
+library(mvtnorm)
+x <- matrix(0,N,2)
+for(i in 1:N){
+  x[i,] <- rmvnorm(1,c(0,0),sigmas[[i]])
+}
+```
+
+### 接平面上の点を球面に写像
+
+球面の接平面上の点と球面上の点の対応には、リーマンの対数・指数変換というものがある。
+
+対数変換が、球面上の点を接平面上の点に移し、指数変換がその逆になる。
+
+リーマンの対数変換・指数変換は、それぞれ、接点を始点とする接面上のベクトルへ変換(対数変換)、接面上のベクトルを球面に変換(指数変換)になっている。
+
+```{r}
+# pが接点
+# x が球面上の点
+# 関数の帰り値にpを加えた座標が切平面に乗る
+my.Riemannian.log <- function(x,p){
+  cos.t <- sum(x*p)
+  if(abs(cos.t)>1){
+    cos.t <- sign(cos.t) * 1
+  }
+  t <- acos(cos.t)
+  return((x-p*cos.t)*t/sin(t))
+}
+# 上記 log関数の逆関数
+my.Riemannian.Exp <- function(x,p){
+  r <- sqrt(sum(x^2))
+  ret <- p * cos(r) + x/r*sin(r)
+  return(ret)
+}
+```
+
+#### 使ってみる
+
+単位球面上の点pの接面に、多数の単位球面上の点を写す。
+
+
+```{r,webgl=TRUE}
+x <- my.runifS2(1000)
+p <- my.runifS2(1)
+## xxは点 pからのベクトル
+xx <- t(apply(x,1,my.Riemannian.log,p))
+xx_p <- t(t(xx) + c(p))
+plot3d(x)
+spheres3d(p,color="red",radius=0.1)
+spheres3d(xx_p,radius=0.05)
+
+s <- sample(1:length(x[,1]),100)
+
+for(i in 1:length(s)){
+  segments3d(rbind(x[s[i],],xx_p[s[i],]))
+}
+
+```
+
+切平面上のベクトルxxを単位球面にpを中心として逆写像する。
+
+```{r,webgl=TRUE}
+y <- t(apply(xx,1,my.Riemannian.Exp,p))
+plot3d(y)
+plot(c(x),c(y)) # 元に戻っている
+```
+
+
+球面上乱点発生のためには、2次元正規乱数と単位球面上の点とから、単位球面上の点座標を定める必要がある。
+
+以下は、リーマンの指数関数を用いつつ、その計算をしている
+```{r}
+# こちらは、接点pが(0,0,1)とみなし、二次元平面上の点xをxy平面上の点とし
+# 球面に写像した上で
+# (0,0,1)を接点pに移す大円回転でxの対応点も移す
+my.Tp2S2 <- function(x,p){
+  tmp.p <- c(0,0,1)
+  
+  # 回転させたいが、まず、pのz = 1平面上の対応点をとる
+  p. <- my.Riemannian.log(p,tmp.p)
+  p. <- c(p.[1:2],0)
+  # その方向の単位ベクトルにする
+  p. <- p./sqrt(sum(p.^2))
+  # p.と直交するベクトルを取る
+  q. <- c(p.[2],-p.[1],0)
+  
+  # z = 1 平面上で (x-tmp.p)ベクトルを、(p.-tmp.p)と(q.-tmp.p)の線形和で表すこととし
+  # その係数を求める
+  M <- cbind(p.[1:2],q.[1:2])
+  coefs <- solve(M) %*% x
+  # tmp.pでの接平面をpでの接平面に移す
+  # ベクトル p. - tmp. p が p.' - p に移るとき
+  # p.' - pは以下に代わる
+  # theta はtmp.pとpとの角
+  theta <- acos(sum(tmp.p*p))
+  p.._p <- c(cos(theta)*p.[1:2],-sin(theta))
+  # q. - tmp.p = q.' - pとなる
+  q.._p <- q.
+  #M. <- cbind(p.._p,q.._q)
+  x._p <- coefs[1] * p.._p + coefs[2] * q.._p
+  x. <- c(x._p) + c(p)
+  #return(x.)
+  return(my.Riemannian.Exp(x._p,p))
+}
+```
+
+#### 使ってみる
+
+ある球面上の点における接面に２次元正規乱点を発生させ、それを球面に移してみる
+```{r}
+mu <- my.runifS2(1)
+sigma <- matrix(c(0.5,0.4,0.4,0.5),2,2)
+n <- 1000
+x2d <- rmvnorm(n,c(0,0),sigma)
+plot(x2d)
+```
+```{r, webgl =TRUE}
+x3d <- t(apply(x2d,1,my.Tp2S2,mu))
+plot3d(x3d)
+spheres3d(mu,radius=0.1,color="red")
+```
+
+## ディリクレ過程混合正規分布球面張り付け
+
+
+一通りの道具がそろったので、関数化して、使ってみる。
+
+```{r}
+my.DPMMS2 <- function(N,alpha=10,df=3,m=matrix(c(1,0,0,1),2,2)*0.01){
+  s <- StickBreaking(alpha,N)
+  t <- rmultinom(1,N,prob=s)
+  mus <- my.runifS2(N)
+  sigmas <- list()
+
+  for(i in 1:N){
+    sigmas[[i]] <- rwish(df,m)
+  }
+  x <- matrix(0,N,3)
+  cnt <- 1
+  for(i in 1:length(t)){
+    if(t[i]!=0){
+        x2d <- matrix(rmvnorm(t[i],c(0,0),sigmas[[i]]),ncol=2)
+      x3d <- t(apply(x2d,1,my.Tp2S2,mus[i,]))
+      x[cnt:(cnt+t[i]-1),] <- x3d
+      cnt <- cnt + t[i]
+    }
+  }
+  return(list(x=x,s=s,t=t,mus=mus,sigmas=sigmas))
+}
+my.plot3d.dpmms2 <- function(out,r=0.05){
+  x <- out$x
+  t <- out$t
+  plot3d(x)
+  cnt <- 1
+  for(i in 1:length(t)){
+    if(t[i]!=0){
+        spheres3d(x[cnt:(cnt+t[i]-1),],color=i,radius=0.05)
+    cnt <- cnt + t[i]
+    }
+  }
+}
+```
+```{r}
+N <- 1000
+dpmms2out <- my.DPMMS2(N)
+
+```
+```{r, webgl =TRUE}
+plot3d(dpmms2out$x)
+```
+```{r, webgl =TRUE}
+my.plot3d.dpmms2(dpmms2out)
+```
+
+## メッシュを作ってみる
+
+```{r}
+library(geometry) # convexhull, delaunay triangulation
+library(Directional) # von-Mises
+library(igraph)
+X <- dpmms2out$x
+
+# 凸包
+hull <- convhulln(X) # hullは三角形の頂点IDの３列行列
+
+# エッジ
+ed <- rbind(hull[,1:2],hull[,2:3],hull[,c(3,1)])
+ed <- unique(t(apply(ed,1,sort)))
+```
+```{r,webgl=TRUE}
+plot3d(X)
+segments3d(X[t(ed),])
+```
+
+```{r}
+# 三角メッシュの検算
+k <- dim(hull)[1]/2
+# |V|
+dim(X)
+k+2
+# |E|
+dim(ed)
+3*k
+# |F|
+dim(hull)
+2*k
+```
+
+三角メッシュのグラフオブジェクト化と、その隣接行列
+
+```{r}
+# グラフオブジェクトにしておく
+g <- graph.edgelist(ed,directed=FALSE)
+degree(g)
+
+# 三角メッシュグラフの隣接行列
+
+Atri <- get.adjacency(g)
+image(as.matrix(Atri))
+table(apply(Atri,1,sum)) # 次数分布
+```
+
+三角メッシュの向きつけ
+
+```{r}
+# 三角形の頂点の並びが統一されていないので、揃えたい
+# 三角形の頂点の並びからエッジを作る
+# 両端点を同じくするエッジは、２つの三角形で共有されている
+# その二つの三角形で両端点の出現が同じ順序になっているとき
+# その頂点並びはどちらかを反転させるべき状態になっていることを表し
+# 逆の場合は、その２つの三角形について頂点並びはそろっている
+# すべての三角形について、そろっている、そろっていない、判断できないの３通りを確認し
+# その情報から整列させることにする
+# cycleの向きをそろえる
+# ２つのcycleがエッジを共有しているとき、その向きが逆であれば
+# ２つのcycleの向きはそろっていることになる
+# そのことを利用して、向きのそろっているかどうかを判定する
+# ここでは頂点数が等しいが、３頂点をサイクルと考えれば
+# 一般にサイクルの整序問題なので、以下の関数ではそのように作る
+
+# c1,c2はサイクルを表す整数列
+# 順序関係がOKなら1を、逆なら-1を、情報が無ければ0を返す
+my.cycle.dir.check <- function(c1,c2){
+  # サイクルから、エッジを作成
+	tmp1 <- cbind(c1,c(c1[-1],c1[1]))
+	tmp2 <- cbind(c2,c(c2[-1],c2[1]))
+	maxv <- max(c(c1,c2))
+	# エッジのIDを、maxv進法的に定める
+	# c2の方は逆向きも考慮する
+	tmp1.v <- tmp1[,1] + (tmp1[,2]-1) * maxv
+	tmp2.v <- tmp2[,1] + (tmp2[,2]-1) * maxv
+	tmp2.v.inv <- tmp2[,2] + (tmp2[,1]-1) * maxv
+	# cyの正逆どちらとc2の正順とが合致するかを判定
+	check1 <- any(tmp2.v %in% tmp1.v)
+	check2 <- any(tmp2.v.inv %in% tmp1.v)
+	
+	if(!check1 & !check2){# 共有エッジなし
+		ret <- 0
+	}else if(check1 & !check2){# 逆
+		ret <- -1
+	}else if(!check1 & check2){# 正
+		ret <- 1
+	}else{# あり得ないはず
+		ret <- 2
+	}
+	return(ret)
+}
+# cyclesは整数列のリスト
+# 順序関係に関する、要素が{0,1,-1}の行列を返す
+my.cycle.dir.check.mat <- function(cycles){
+	nc <- length(cycles)
+	ret <- matrix(0,nc,nc)
+	for(i in 1:(nc-1)){
+		for(j in ((i+1):nc)){
+			ret[i,j] <- ret[j,i] <- my.cycle.dir.check(cycles[[i]],cycles[[j]])
+		}
+	}
+	return(ret)
+}
+
+# 行列のべき乗を使って、サイクルの順序関係をベクトルとして返す
+my.sign.check <- function(S){
+	s <- S[,1]
+	svd.out <- svd(S)
+	n <- length(S[,1])
+	# 正負の区別には、定数倍は無用だから、大きくなりすぎるのを
+	# 対数化をかませて防ぐ
+	tmp <- log(svd.out$d) * n
+	sign(svd.out$u %*% diag(exp(tmp-max(tmp))) %*% t(svd.out$v) %*% s)
+}
+# サイクルセットを整列して返す
+# cyは整数列のリスト
+my.direction.cycles <- function(cy){
+	S <- my.cycle.dir.check.mat(cy)
+	s <- my.sign.check(S)
+	ret <- list()
+	for(i in 1:length(cy)){
+		ret[[i]] <- cy[[i]]
+		if(s[i]==-1){
+			ret[[i]] <- ret[[i]][length(ret[[i]]):1]
+		}
+	}
+	return(ret)
+}
+
+# 行列状になっている三角形頂点情報行列Fをリストにして上記関数に渡すためのラッパー
+my.order.check <- function(F){
+	cycles <- list()
+	for(i in 1:length(F[,1])){
+		cycles[[i]] <- F[i,]
+	}
+	sorted.cycles <- my.direction.cycles(cycles)
+	ret <- F
+	for(i in 1:length(cycles)){
+		ret[i,] <- sorted.cycles[[i]]
+	}
+	return(ret)
+}
+```
+
+三角形頂点並びを整える
+```{r}
+srtd.hull <- Fv <- my.order.check(hull)
+```
+
+検算しておく
+```{r}
+# 検算
+srtd.hull.list <- list()
+for(i in 1:length(srtd.hull[,1])){
+	srtd.hull.list[[i]] <- srtd.hull[i,]
+}
+
+cycle.dir.mat <- my.cycle.dir.check.mat(srtd.hull.list)
+cycle.group <- my.sign.check(cycle.dir.mat)
+table(cycle.group) # 1か-1ばかりのはず
+```
+
+3正則グラフ(三角メッシュの双対グラフ)
+
+三角メッシュの三角形を頂点とするグラフは3正則グラフ。
+
+その隣接行列を作成しておく。
+
+```{r}
+# サイクル向きチェックの出力を使って、３正則グラフの隣接行列を作っておく
+
+A.reg <- matrix(0,length(hull[,1]),length(hull[,1]))
+A.reg[which(cycle.dir.mat == 1)] <- 1
+
+table(apply(A.reg,1,sum)) # 全部３
+```
+
+頂点、辺、面の関係と巡回・置換
+
+```{r}
+# fは三角形の向きをそろえた頂点IDを納めた3列行列、もしくは
+# 頂点に対応する頂点次数d個の三角形IDのサイクルを納めたリスト
+my.permutation.vef <- function(f){
+  cy <- f
+  if(is.matrix(f)){
+    tmp <- list()
+    for(i in 1:length(f[,1])){
+      tmp[[i]] <- f[i,]
+    }
+    cy <- tmp
+  }
+  # このlength(cy)個のサイクルに対応する置換行列を作る
+  cy.len <- sapply(cy,length)
+  n <- sum(cy.len)
+  Fmat <- matrix(0,n,n)
+  cnt <- 1
+  for(i in 1:length(cy)){
+    Fmat [cnt:(cnt+cy.len[i]-1),cnt:(cnt+cy.len[i]-1)] <- diag(cy.len[i])[c(2:cy.len[i],1),]
+    cnt <- cnt + cy.len[i]
+  }
+  # f,cyの各行・各要素は、サイクルの頂点
+  # それぞれのサイクルの頂点に対して、その頂点を始点とするエッジを割り振る
+  # その始点・終点を取り出す
+  tmp.fx <- function(x){
+    st <- x
+    end <- c(x[2:length(x)],x[1])
+    tmp <- cbind(st,end)
+    return(c(t(tmp)))
+  }
+  # 向きありエッジリスト(すべてユニーク)
+  ed <- t(matrix(sapply(cy,tmp.fx),nrow=2))
+  # sortして、両端点を共有する相手を見つける
+  ed.sort <- t(apply(ed,1,sort))
+  ed.sort.dist <- as.matrix(dist(ed.sort))
+  Emat <- ed.sort.dist==0
+  diag(Emat) <- 0
+  # これがエッジペアの巡回を集めた置換行列
+  
+  # fが三角形回りの頂点ID行列なら、頂点の
+  # fが頂点回りの三角形IDのリストなら、三角形の
+  # それぞれ巡回情報は以下で得られる
+  Vmat <- Fmat %*% Emat 
+  
+  return(list(Fmat=Fmat,Emat=Emat,Vmat=Vmat))
+}
+```
+
+```{r}
+VEFmat <- my.permutation.vef(hull)
+```
