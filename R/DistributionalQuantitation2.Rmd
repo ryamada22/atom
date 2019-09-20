@@ -277,43 +277,6 @@ my.plot3d.dpmms2 <- function(out,r=0.05){
   }
 }
 ```
-
-## Distributional quantification of dissimilarity between two point sets
-
-### Two point sets on S2
-
-```{r}
-N <- 1000
-alpha <- 10
-s <- StickBreaking(alpha,N)
-mus <- my.runifS2(N)
-df=3
-m=matrix(c(1,0,0,1),2,2)*0.01
-sigmas <- list()
-for(i in 1:N){
-  sigmas[[i]] <- rwish(df,m)
-}
-sms1 <- list(s=s,mus=mus,sigmas=sigmas)
-s2 <- StickBreaking(alpha,N)
-sms2 <- list(s=s2,mus=mus,sigmas=sigmas)
-dpmms2out1 <- my.DPMMS2(N,sms=sms1)
-dpmms2out2 <- my.DPMMS2(N,sms=sms2)
-
-```
-```{r, webgl =TRUE}
-plot3d(dpmms2out1$x)
-```
-```{r, webgl =TRUE}
-plot3d(dpmms2out2$x)
-```
-```{r, webgl =TRUE}
-my.plot3d.dpmms2(dpmms2out1)
-```
-```{r, webgl =TRUE}
-my.plot3d.dpmms2(dpmms2out2)
-```
-
-
 ```{r}
 # Nは乱点の数を決める引数
 # f1 は黄金比の値をデフォルトとする値。この値を黄金比から変えると格子としての良い性格がなくなる
@@ -379,8 +342,126 @@ my.rot3d.by.q <- function(x,q){
   rot.x <- Conj(q) * tmp.x * q
   return(c(i(rot.x),j(rot.x),k(rot.x)))
 }
+my.rotmat.q <- function(q){
+  m <- matrix(0,3,3)
+  m[1,1] <- 1-2*(j(q)^2 + k(q)^2)
+  m[1,2] <- 2 * (i(q)*j(q) - k(q)*Re(q))
+  m[1,3] <- 2 * (i(q) * k(q) + j(q) * Re(q))
+  m[2,1] <- 2*(i(q) * j(q) + k(q) * Re(q))
+  m[2,2] <- 1- 2 *(i(q)^2 + k(q)^2)
+  m[2,3] <- 2 * (j(q) * k(q) - i(q) * Re(q))
+  m[3,1] <- 2 * (i(q) * k(q) - j(q) * Re(q))
+  m[3,2] <- 2 * (j(q) * k(q) + i(q) * Re(q))
+  m[3,3] <- 1- 2 * (i(q)^2 + j(q)^2)
+  return(m)
+}
+```
+```{r}
+my.distributional.quant <- function(x1,x2,k,rot.q=NULL,N=100,n=100,log=FALSE){
+  if(is.null(rot.q)){
+    rot.q <- my.fib.rot.q(N,n)
+  }
+  
+  #x2.q <- x2[,1] * Hi + x2[,2] * Hj + x2[,3] * Hk
+  ret <- rep(0,length(rot.q))
+  for(i in 1:length(ret)){
+    #tmp <- Conj(rot.q[i]) * x2.q * rot.q[i]
+    #tmp.x2 <- cbind(i(tmp),j(tmp),k(tmp))
+    tmp.x2 <- t(my.rotmat.q(rot.q[i]) %*% t(x2)) 
+    ret[i] <- my.vonMises.like(x1,tmp.x2,k=k,log=log)
+  }
+  return(ret)
+}
 ```
 
+## Distributional quantification of dissimilarity between two point sets
+
+### Two point sets on S2
+
+```{r}
+n.dist <- 30
+N <- 100
+alpha <- 10
+#s <- StickBreaking(alpha,N)
+mus <- my.runifS2(N)
+df=3
+m=matrix(c(1,0,0,1),2,2)*0.01
+sigmas <- list()
+for(i in 1:N){
+  sigmas[[i]] <- rwish(df,m)
+}
+X.list <- list()
+for(i in 1:n.dist){
+  tmps <- StickBreaking(alpha,N)
+  X.list[[i]] <- my.DPMMS2(N,sms=list(s=tmps,mus=mus,sigmas=sigmas))$x
+}
+
+```
+
+```{r}
+Nfib <- 20
+n <- 10
+rot.q <- my.fib.rot.q(Nfib,n)
+```
+```{r}
+D.array <- array(0,c(n.dist,n.dist,length(rot.q)))
+for(i in 1:(n.dist-1)){
+  for(j in i:n.dist){
+    D.array[i,j,] <- my.distributional.quant(X.list[[i]],X.list[[j]],rot.q=rot.q,k=1,log=TRUE)
+  }
+}
+```
+
+```{r}
+D.array. <- D.array
+for(i in 1:length(rot.q)){
+  D.array.[,,i] <- D.array[,,i] + t(D.array[,,i])
+  diag(D.array.[,,i]) <- diag(D.array[,,i])
+}
+
+```
+```{r}
+D.array2 <- array(0,c(n.dist,n.dist,length(rot.q)))
+for(i in 1:(n.dist-1)){
+  for(j in i:n.dist){
+    D.array2[i,j,] <- my.distributional.quant(X.list[[i]],X.list[[j]],rot.q=rot.q,k=100,log=TRUE)
+  }
+}
+```
+```{r}
+D.array2. <- D.array2
+for(i in 1:length(rot.q)){
+  D.array2.[,,i] <- D.array2[,,i] + t(D.array2[,,i])
+  diag(D.array2.[,,i]) <- diag(D.array2[,,i])
+}
+
+```
+```{r}
+par(mfcol=c(1,2))
+image(apply(D.array.,c(1,2),min))
+image(apply(D.array2.,c(1,2),min))
+
+image(apply(D.array.,c(1,2),mean))
+image(apply(D.array2.,c(1,2),mean))
+
+image(apply(D.array.,c(1,2),var))
+image(apply(D.array2.,c(1,2),var))
+
+image(apply(D.array.,c(1,2),min)-apply(D.array2.,c(1,2),min))
+image(apply(D.array.,c(1,2),mean)-apply(D.array2.,c(1,2),mean))
+
+hist(apply(D.array.,c(1,2),min))
+hist(apply(D.array2.,c(1,2),min))
+
+hist(apply(D.array.,c(1,2),mean))
+hist(apply(D.array2.,c(1,2),mean))
+
+hist(apply(D.array.,c(1,2),var))
+hist(apply(D.array2.,c(1,2),var))
+
+hist(apply(D.array.,c(1,2),min)-apply(D.array2.,c(1,2),min))
+hist(apply(D.array.,c(1,2),mean)-apply(D.array2.,c(1,2),mean))
+```
 ### Calculate vonBises-type relative likelihood-like value with various k values
 
 ```{r}
@@ -392,28 +473,15 @@ for(i in 1:length(ks)){
   ls[i] <- my.vonMises.like(x1,x2,k=ks[i])
 }
 ```
+
+
+
 ```{r}
 plot(ks,ls)
 ```
 
 ### Rotate one distribution with many evenly-spaced rotations and measure von-Mises-type likelihood
 
-```{r}
-my.distributional.quant <- function(x1,x2,k,rot.q=NULL,N=100,n=100,log=FALSE){
-  if(is.null(rot.q)){
-    rot.q <- my.fib.rot.q(N,n)
-  }
-  
-  x2.q <- x2[,1] * Hi + x2[,2] * Hj + x2[,3] * Hk
-  ret <- rep(0,length(rot.q))
-  for(i in 1:length(ret)){
-    tmp <- Conj(rot.q[i]) * x2.q * rot.q[i]
-    tmp.x2 <- cbind(i(tmp),j(tmp),k(tmp))
-    ret[i] <- my.vonMises.like(x1,tmp.x2,k=k,log=log)
-  }
-  return(ret)
-}
-```
 
 ```{r}
 N <- 100
