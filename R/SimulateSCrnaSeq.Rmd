@@ -1,0 +1,92 @@
+---
+title: "Simulational scRNAseq data generation"
+author: "ryamada"
+date: "2019年9月26日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Motivation 
+
+As the initial step, the number of reads from 100 cell pool were distributed to 100 cells stochastically.
+
+With this procedure, the number of total reads of every cell is much smaller than the number of reads of the pool.
+
+The number of total reads of each cell in future single cell RNA seq experiments will be similar to the number of the current pool experiments.
+
+Therefore it would be better to generate the simulational sc-RNA seq data in that way.
+
+The following is an idea to do so.
+
+## Preparation
+
+The codes below is just make an example of read counts of all genes of an experiment of 100 cell pool.
+
+```{r}
+library(MCMCpack) # For dirichlet distribution functions
+n.gene <- 20000 # number of genes
+# Assumption: there are two groups of genes.
+# One group has low expression level
+# The other group has relatively higher expression level
+n.gene.1 <- n.gene*0.6
+n.gene.2 <- n.gene - n.gene.1
+# Total read counts per experiment... 
+n.read.total <- 10^5
+
+# Fraction vector of n.gene length is generated 
+# Randomly generate fraction following Dirichlet distribution
+p1 <- rdirichlet(1,rep(0.1,n.gene.1))
+p2 <- rdirichlet(1,rep(20,n.gene.2))
+# Combine two gene groups' fraction with heavy weight on the 2nd group
+p <- c(p1*0.01,p2*0.99)
+# Randomly generate experiment data
+r <- rmultinom(1,n.read.total,prob=p)
+# Showing the read counts
+hist(r)
+plot(tabulate(r),type="h")
+sum(r) # = n.read.total
+```
+
+## Data simulation from the experiment read count vector
+
+The estimation of fraction based on multinomial count data should be in Dirichlet distribution.
+
+Of note, the 2nd argument for the dirichlet distribution function, rdirichlet() shoudl be r + 1 , rathere than r.
+
+We have a multinomial count data as generated above.
+
+The following codes generate simulational fraction vector for individual cell.
+
+This provides some heterogeneity among cells.
+
+```{r}
+n.cell <- 100
+sim.frac <- rdirichlet(n.cell,r + 1)
+```
+
+Secondly, we stochastically generate sc-RNAseq data for 100 cells, independently.
+
+```{r}
+sim.reads <- matrix(0,n.cell,n.gene)
+for(i in 1:n.cell){
+	sim.reads[i,] <- rmultinom(1,n.read.total,prob=sim.frac[i,])
+}
+```
+
+Let's take a look at summary statistics of read counts per gene among 100 cells.
+
+```{r}
+means <- apply(sim.reads,2,mean)
+vars <- apply(sim.reads,2,var)
+medians <- apply(sim.reads,2,quantile,0.5)
+
+pairs(cbind(means,vars,medians))
+```
+
+```{r}
+pick.up.genes <- sort(sample(1:n.gene,100))
+boxplot(sim.reads[,pick.up.genes])
+```

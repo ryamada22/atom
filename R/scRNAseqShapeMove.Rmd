@@ -1,0 +1,246 @@
+---
+title: "AnalysisToIdentifyShapeMovementGene"
+author: "ryamada"
+date: "2019年9月27日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Simplified model
+
+* Assume two cell types (or two conditions)
+* The gene expression profiles of two types are different; expression level of many genes are different between two groups.
+* We are interested in the genes that affect shape/movement not in the genes that characterize the cell types.
+* Let's assume some genes affect on shape/movement phenotypes in both cell types.
+
+Our question is how to detect the genes that affect on shape/movement phenotypes.
+
+## Simulational data generation.
+
+### Characterization of two cell types
+```{r}
+# number of genes
+n.gene <- 2000
+
+# gene expression follows a mixture of two log-normal distribution
+frac.low <- 0.5
+m.low <- rlnorm(n.gene * frac.low, meanlog=3,sdlog=0.8)
+m.high <- rlnorm(n.gene * (1 - frac.low), meanlog=6,sdlog=0.2)
+hist(c(m.low,m.high))
+
+tmp.means <- sample(c(m.low,m.high)) # shuffle the values
+# fraction of genes with different expression
+p <- 0.3
+gene.diff <- sample(1:n.gene,n.gene*p)
+means <- cbind(tmp.means,tmp.means)
+tmp.mean.diff <- tmp.means[gene.diff]
+for(i in 1:length(gene.diff)){
+  means[gene.diff[i],] <- rlnorm(2,log(tmp.mean.diff[i]),0.2)
+}
+par(mfcol=c(1,2))
+hist(means[,1])
+hist(means[,2])
+par(mfcol=c(1,1))
+plot(means,pch=20,cex=0.1)
+```
+
+### Characterization of individual cells
+
+Cells in a same type vary.
+
+```{r}
+# number of cells
+n.cell <- c(100,120)
+lambdas1 <- matrix(0,n.gene,n.cell[1])
+lambdas2 <- matrix(0,n.gene,n.cell[2])
+
+for(i in 1:n.gene){
+  lambdas1[i,] <- rlnorm(n.cell[1],log(means[i,1]),0.05)
+  lambdas2[i,] <- rlnorm(n.cell[2],log(means[i,2]),0.05)
+}
+```
+
+
+
+## RNAseq data generation
+```{r}
+RNAseq1 <- matrix(rpois(length(lambdas1),lambdas1),n.gene,n.cell[1])
+RNAseq2 <- matrix(rpois(length(lambdas2),lambdas2),n.gene,n.cell[2])
+
+```
+
+t.test to compare two cell types
+```{r}
+p.ttest <- rep(0,n.gene)
+for(i in 1:n.gene){
+  p.ttest[i] <- t.test(RNAseq1[i,],RNAseq2[i,])$p.value
+}
+```
+
+```{r}
+hist(p.ttest) # p of all genes
+hist(p.ttest[gene.diff]) # genes with different expression level between two types
+hist(p.ttest[-gene.diff]) # genes without difference between two types
+```
+
+## Phenotype generation
+
+Let's assume phenotype value of cell type 1 is larger than cell type 2.
+
+The expression of contributing genes should be higher in cell type 1 if its contribution is positive.
+On the contrary the expression of contributing genes should be lower in cell type 1 if its contribution is negative.
+
+```{r}
+n.assoc.gene <- 100
+# some assoc genes are diffrent between two types
+# the others are not different between two types
+assoc.genes <- sample(1:n.gene,n.assoc.gene)
+
+means.assoc <- means[assoc.genes,]
+direction.of.contribution <- as.numeric(means.assoc[,1] > means.assoc[,2])
+
+zero.dir <- which(direction.of.contribution==0)
+direction.of.contribution[zero.dir] <- sample(c(-1,1),length(zero.dir),replace=TRUE)
+
+weights <- runif(n.assoc.gene) * 1000 * direction.of.contribution
+
+# phenotype in in linear model with lambdas (not with RNAseq)
+# phenotype component explained by gene expression level
+pheno1 <- c(t(lambdas1[assoc.genes,]) %*% weights)
+pheno2 <- c(t(lambdas2[assoc.genes,]) %*% weights)
+
+# cell type heavily affects phenotypes
+# pheno1 <- pheno1 + 0
+# pheno2 <- pheno2 + sd(pheno2)*50
+```
+
+Observed phenotypes are purturbed with non-gene expression factors and observational randomness.
+```{r}
+pheno1.obs <- pheno1 + rnorm(length(pheno1),0,0.001*abs(mean(pheno1)))
+pheno2.obs <- pheno2 + rnorm(length(pheno2),0,0.001*abs(mean(pheno2)))
+```
+
+Phenotypes observed are significantly different between two types.
+
+```{r}
+boxplot(pheno1.obs,pheno2.obs)
+t.test(pheno1.obs,pheno2.obs)
+```
+
+## Statistical test
+
+Conditioned with cell types, each gene's expression level is tested for relation with observed phenotypes.
+```{r}
+p.pheno <- rep(0,n.gene)
+for(i in 1:n.gene){
+  tmp <- lm(c(pheno1.obs,pheno2.obs) ~ c(RNAseq1[i,],RNAseq2[i,]))
+  p.pheno[i] <- anova(tmp)$Pr[1]
+}
+```
+
+Positive genes are the genes associated with cell types, not associated with phenotypes, unfortunately.
+```{r}
+hist(p.pheno)
+hist(p.pheno[gene.diff])
+hist(p.pheno[-gene.diff])
+# p-values of phenotypes are correlated with p-values to test cell-types.
+plot(p.pheno,p.ttest)
+```
+
+If we test cells per cell types...
+
+```{r}
+p.pheno1 <- p.pheno2 <- rep(0,n.gene)
+for(i in 1:n.gene){
+  tmp1 <- lm(pheno1.obs~RNAseq1[i,])
+  p.pheno1[i] <- anova(tmp1)$Pr[1]
+  tmp2 <- lm(pheno2.obs~RNAseq2[i,])
+  p.pheno2[i] <- anova(tmp2)$Pr[1]
+}
+```
+
+Phenotype-associated genes are not well detected ...
+```{r}
+hist(p.pheno1)
+hist(p.pheno1[assoc.genes])
+hist(p.pheno1[-assoc.genes])
+hist(p.pheno2)
+hist(p.pheno2[assoc.genes])
+hist(p.pheno2[-assoc.genes])
+
+plot(p.pheno1,p.pheno2)
+plot(sort(p.pheno1))
+plot(sort(p.pheno2))
+```
+
+What would happen if we can test association between phenotypes and lambdas, rather than RNAseq counts??
+
+```{r}
+p.lambda1 <- p.lambda2 <- rep(0,n.gene)
+for(i in 1:n.gene){
+  tmp1 <- lm(pheno1.obs~lambdas1[i,])
+  p.lambda1[i] <- anova(tmp1)$Pr[1]
+  tmp2 <- lm(pheno2.obs~lambdas2[i,])
+  p.lambda2[i] <- anova(tmp2)$Pr[1]
+}
+```
+
+Phenotype-associated genes are not well detected ...
+```{r}
+hist(p.lambda1)
+hist(p.lambda1[assoc.genes])
+hist(p.lambda1[-assoc.genes])
+hist(p.lambda2)
+hist(p.lambda2[assoc.genes])
+hist(p.lambda2[-assoc.genes])
+
+plot(p.lambda1,p.lambda2)
+plot(sort(p.lambda1))
+plot(sort(p.lambda2))
+```
+
+If the cell type information is added in the regression formula?
+
+```{r}
+p.pheno.cond <- matrix(0,n.gene,3)
+ph <- c(pheno1.obs,pheno2.obs)
+types <- c(rep(1,n.cell[1]),rep(2,n.cell[2]))
+for(i in 1:n.gene){
+  rna <- c(RNAseq1[i,],RNAseq2[i,])
+  tmp <- lm(ph ~ rna + types + rna * types)
+  p.pheno.cond[i,] <- anova(tmp)$Pr[1:3]
+}
+```
+
+It is not enough.
+
+Still a lot of genes that are mearly associated with cell types are positively selected for the genes on the phenotypes.
+
+```{r}
+hist(p.pheno.cond[,1])
+hist(p.pheno.cond[assoc.genes,1])
+hist(p.pheno.cond[-assoc.genes,1])
+plot(sort(p.pheno.cond[,1]))
+plot(sort(log10(p.pheno.cond[,1])))
+plot(p.pheno.cond[,1],p.ttest)
+plot(p.pheno.cond[,1],p.pheno)
+
+```
+
+```{r}
+mean(p.pheno[assoc.genes])
+mean(p.pheno[-assoc.genes])
+
+mean(p.pheno1[assoc.genes])
+mean(p.pheno1[-assoc.genes])
+mean(p.pheno2[assoc.genes])
+mean(p.pheno2[-assoc.genes])
+
+
+mean(p.pheno.cond[assoc.genes,1])
+mean(p.pheno.cond[-assoc.genes,1])
+```
+
