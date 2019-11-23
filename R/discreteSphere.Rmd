@@ -1,0 +1,269 @@
+---
+title: "球の離散表現"
+author: "ryamada"
+date: "2019/11/23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(igraph)
+```
+
+## 球面上の直線
+
+球上をまっすぐに進むとき、それは大円となる。
+
+任意の１つの大円は自己交叉のないサイクルである。
+
+任意の２つの大円は２点で交叉する。
+
+## 球面を表す点と直線とのincidence matrix
+
+球面が等長辺３正則グラフで覆われているとする。
+
+球面は至るところで対称なので、全ての大円サイクルの長さは等しい。
+
+したがって、全ての大円相当サイクルを構成する辺の数は等しい。
+
+エッジ数が$N_e = 3k$で、サイクル数が$N_c$とする。
+
+また、サイクルを構成するエッジ数を$M$とする。
+
+３正則グラフのジグザグサイクルでは、全てのエッジが２回通過されるので
+
+$$
+N_c M = 2 N_e = 6k
+$$
+
+また、全てのサイクルは相互に対称なので、あるサイクルを構成する$M$個のエッジは、残りの$N_c-1$個のサイクルに等分配される。
+
+また、球面の任意の２大円は２つの交点を持つから
+
+$$
+M = 2(N_c - 1)
+$$
+
+したがって
+
+$$
+N_c M = 2 N_c (N_c -1) = 6k\\
+N_c(N_c-1) = 3k
+$$
+
+これを満足するのは$N_c$が３の倍数である場合か、$N_c-1$が３の倍数である場合である。
+
+ここで、ジグザグサイクルの特徴から、$N_c$が偶数の場合だけを取り上げることは、このモデルの$N_c \to \infty$を考える場合に、（一定の制約の下で）十分である。
+
+そのような場合は、$N_c$が６の倍数の場合と、$N_c-1$が３の倍数である奇数の場合である。
+
+それぞれ、整数$p$を用いて以下のように表せる場合である。
+$$
+N_c = 6p\\
+N_c = 6p -2
+$$
+
+それぞれ、$N_c$が偶数で３の倍数、$N_c-1$が３の倍数で$N_c$が偶数の場合に対応する。
+
+## 球に対応する点・サイクルincidenceの双対グラフ
+
+
+この双対グラフの頂点数は$N_c$。
+全てのサイクルペアは２頂点で交叉するから、この双対グラフの２頂点間を結ぶ辺の数は、２。
+
+したがって、対角成分が０で、非対角成分が全て２であるような隣接行列となる。
+
+```{r}
+# even = TRUEならNc=6pの場合、そうでなければNc=6p-2の場合
+my.sphere.incident <- function(p,even=TRUE){
+  if(even){
+    Nc <- 6 *p
+  }else{
+    Nc <- 6 * p -2
+  }
+  M <- 2 * (Nc-1)
+  k <- Nc*M / 6
+  Ne <- 3 * k
+  Nf <- 2 * k
+  Nv <- k + 2
+  I <- my.make.I(Nc)
+  Ad.cy <- matrix(2,Nc,Nc)
+  diag(Ad.cy) <- 0
+  return(list(I=I,Ad.cy = Ad.cy))
+}
+my.make.I <- function(Nc){
+  M <- 2 * (Nc - 1)
+  I <- matrix(0,0,Nc)
+  for(i in 1:Nc){
+    n.0.col <- i-1
+    n.row <- M - 2*(i-1)
+    step.mat <- matrix(0,n.row,Nc-i)
+    
+    if(Nc-i > 0){
+      step.mat.tmp <- diag(rep(1,Nc-i)) 
+      step.mat <- step.mat.tmp[rep(1:(Nc-i),each=2),]
+      #for(j in 1:(Nc-i)){
+      #  step.mat[(1:2)+2*(j-1),j] <- 1
+      #}
+    }
+
+    tmp <- cbind(matrix(0,n.row,n.0.col),rep(1,n.row),step.mat)
+    I <- rbind(I,tmp)
+  }
+  return(I)
+}
+```
+```{}
+# old/slow version
+my.make.I <- function(Nc){
+  M <- 2 * (Nc-1)
+  k <- Nc*M / 6
+  Ne <- 3 * k
+  I <- matrix(0,Ne,Nc)
+  I[1:M,1] <- 1
+  for(i in 2:Nc){
+    #print("i=")
+    #print(i)
+    for(j in 1:(i-1)){
+      #print("j=")
+      #print(j)
+      tmp <- which(I[,j]==1)
+      #print(tmp)
+      tmp2 <- tmp[(1:2)+2*(i-2)]
+      #print(tmp2)
+      I[tmp2,i] <- 1
+    }
+    tmp3 <- M - 2*(i-1)
+    tmp4 <- which(I == 1, arr.ind=TRUE)
+    #print(tmp4)
+    tmp5 <- max(tmp4[,1])
+    #print(tmp3)
+    if(tmp3 > 0){
+      I[(tmp5 + 1):(tmp5 + tmp3),i] <- 1
+    }
+  }
+  return(I)
+}
+```
+```{r}
+p <- 1
+out <- my.sphere.incident(p)
+```
+```{r}
+image(out$I)
+plot(apply(out$I,1,sum)) # all 2s
+plot(apply(out$I,2,sum)) # length of cycles
+```
+
+
+## サイクルを復元する
+
+サイクルは３正則グラフの有向辺接続行列を右曲がり・左曲がりステップに分解し、その２つのステップの積行列が置換行列であることを利用して求めるから、無向辺incident行列の情報から、有向辺接続行列の情報に改変する必要がある。
+
+改変に当たって必要なことは、次の２点である。
+
+辺の順番を復元すること。
+
+１つの無向辺を２つの有向辺に分けること。
+
+点・サイクルincident行列では、各サイクルの構成エッジに１が立っている。
+
+あるサイクルの１が立っているセルは上下に並んでいる２エッジは、別のサイクルとの交点ペアに相当するので、これらが大円サイクルの対蹠点関係にあるようにする。
+
+また、各エッジはincidenct行列に２回ずつ登場するが、それは有向辺として扱った時、異なる方向のエッジに対応している。
+
+## エッジ両方向ペア
+
+incident行列で同じ行にある２つの１が立ったセルは相互に同じエッジの二方向有向辺に対応する。
+
+incident行列の１の立ったセルの番地を取り出す。
+
+```{r}
+I <- out$I
+ed.addr <- which(I==1,arr.ind=TRUE)
+```
+
+```{r}
+my.pairs.from.I <- function(I){
+  ed.addr <- which(I==1,arr.ind=TRUE)
+  Pairs <- matrix(0,length(ed.addr[,1]),length(ed.addr[,1]))
+  for(i in 1:max(ed.addr)){
+    tmp <- which(ed.addr[,1]==i)
+    Pairs[tmp[1],tmp[2]] <- Pairs[tmp[2],tmp[1]] <- 1
+  }
+  return(Pairs)
+}
+```
+
+Pairs <- matrix(0,length(ed.addr[,1]),length(ed.addr[,1]))
+for(i in 1:max(ed.addr)){
+  tmp <- which(ed.addr[,1]==i)
+  Pairs[tmp[1],tmp[2]] <- Pairs[tmp[2],tmp[1]] <- 1
+}
+
+```{r}
+Pairs <- my.pairs.from.I(I)
+image(Pairs)
+```
+
+
+サイクルの構成辺のリストがあった時に、前から２辺ずつが対蹠位置になるように並んでいるものとした時に、サイクルの並び順に置き換える関数を作る。
+
+ただし、構成辺の数は偶数とする。
+
+```{r}
+my.cycle.order.from.opposite <- function(v){
+  m <- matrix(v,ncol=2,byrow=TRUE)
+  return(c(m)) 
+}
+```
+
+サイクルができたら、その奇数番目辺→偶数番目辺は右向き進行、偶数番目辺→奇数番目辺は左向き進行というように振り分けたい。
+
+その関数を作る。
+
+```{r}
+my.RL.separator <- function(v){
+  tmp <- cbind(v,c(v[-1],v[1]))
+  len <- length(v)
+  tmp2 <- matrix(1:len,ncol=2,byrow=TRUE)
+  R <- tmp[tmp2[,1],]
+  L <- tmp[tmp2[,2],]
+  return(list(R=R,L=L))
+}
+```
+
+道具が揃ったので、incident行列から、サイクル構成辺IDのリストを取り出し、それらから、右向き進行、左向き進行の有向辺接続情報を取り出す関数を作る。
+
+```{r}
+my.RL.from.incident <- function(I){
+  ed.addr <- which(I==1,arr.ind=TRUE)
+  Nc <- length(I[1,])
+  M <- sum(I)/Nc
+  ord.cy <- my.cycle.order.from.opposite(1:M)
+  R <- L <- matrix(0,0,2)
+  for(i in 1:Nc){
+    tmp <- which(ed.addr[,2] == i)
+    tmp2 <- tmp[ord.cy]
+    tmpRL <- my.RL.separator(tmp2)
+    R <- rbind(R,tmpRL$R)
+    L <- rbind(L,tmpRL$L)
+  }
+  return(list(R=R,L=L))
+}
+```
+
+```{r}
+RL <- my.RL.from.incident(I)
+```
+
+```{r}
+gR <- graph.edgelist(RL$R) 
+gL <- graph.edgelist(RL$L) 
+```
+```{r}
+plot(gR)
+```
+```{r}
+plot(gL)
+```
