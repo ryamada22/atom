@@ -147,7 +147,7 @@ my.make.I <- function(Nc){
 ```
 ```{r}
 p <- 1
-out <- my.sphere.incident(p)
+out <- my.sphere.incident(p,even=FALSE)
 ```
 ```{r}
 image(out$I)
@@ -175,6 +175,14 @@ plot(apply(out$I,2,sum)) # length of cycles
 ## エッジ両方向ペア
 
 incident行列で同じ行にある２つの１が立ったセルは相互に同じエッジの二方向有向辺に対応する。
+
+！！！
+このペアは必ずしも、逆向きとは限らない。
+無向辺としてはペアになるが、このサイクルの指定の仕方では向までは特定できない。
+このことが、以降の右・左振り分けでうまくいかない原因らしい。
+！！！
+
+
 
 incident行列の１の立ったセルの番地を取り出す。
 
@@ -252,14 +260,111 @@ my.RL.from.incident <- function(I){
   return(list(R=R,L=L))
 }
 ```
-
 ```{r}
 RL <- my.RL.from.incident(I)
 ```
+ここまでだと、右を先にしたジグザグサイクルの有向辺接続のみが得られるだけになる。
+
+ここで得られた右曲がりの有向辺接続に対して、それぞれの逆向き辺をとり、順序を変えた有向辺接続は左曲がり。
+
+同様に左曲がりの有向辺接続に対するものは、右曲がり。
+
+これらを加えることにする。
+
+有向辺の対応情報Pairsにより、行列の行ID、列IDを入れ替えると、逆向き有向辺に変わる。
+
+i -> i', j -> j' という変更と表すことにする。
+
+その上で、i' -> j' を j' -> i' と変更するのは、行列では転置に相当する。
+
+これを関数化したものが以下。
+
+
+R, L と区別しているが、これはミスリーディング。
+返り値のW,cy,cy.invが大事。
+Wは３正則グラフの辺接続行列。
+cyはincident行列によって指定したサイクルに相当する置換行列。cy.invはその逆回りに相当する置換行列。
+cy1,cy2,cy1.inv,cy2.invはそれらを便宜的に２分割したもの。incident行列のサイクルを２ステップに振り分けて算出した際の便宜的なもの。
+
+回りくどい作成手順となってしまったので、どこかで単純化しても良い。
 
 ```{r}
-gR <- graph.edgelist(RL$R) 
-gL <- graph.edgelist(RL$L) 
+my.RL.inverse <- function(M,Pairs){
+  n <- length(M[,1])
+  v <- 1:n
+  v. <- Pairs %*% v
+  M. <- M[v.,v.]
+  #M. <- Pairs %*% M
+  return(t(M.))
+  #return(M.)
+}
+```
+
+```{r}
+my.RL.full.from.incident <- function(I){
+  RL <- my.RL.from.incident(I)
+  gR <- graph.edgelist(RL$R) 
+  gL <- graph.edgelist(RL$L) 
+  Rmat <- as.matrix(get.adjacency(gR)) 
+  Lmat <- as.matrix(get.adjacency(gL)) 
+  Pairs <- my.pairs.from.I(I)
+  R. <- my.RL.inverse(Rmat,Pairs) 
+  L. <- my.RL.inverse(Lmat,Pairs) 
+  
+  #R <- Rmat + L.
+  #L <- Lmat + R.
+  cy <- Rmat + Lmat # 置換
+  cy.inv <- R. + L.
+  
+  W <- cy + cy.inv # 3-regular graphの辺接続行列
+  
+  return(list(W=W,Pairs=Pairs,cy=cy,cy.inv=cy.inv,cy1=Rmat,cy2=Lmat,cy1.inv=R.,cy2.inv=L.))
+}
+```
+
+辺接続行列を作成する。
+```{r}
+W <- my.RL.full.from.incident(I)
+```
+
+## 辺接続行列からグラフを作る
+
+３正則グラフの辺接続行列の各行は、ある有向辺が接続する２有向辺を示している。
+
+この辺接続行列の各行に現れる３有向辺のトリオは３正則グラフの頂点に相当する。
+
+ただし、有向辺で考えているときに、頂点に対応する３有効辺トリオは複数あることに注意する。
+```{r}
+my.W2G <- function(W,Pairs){
+  n <- length(Pairs[,1])
+
+  # tmp.Pairsは、ペア辺のIDを小さい方のIDに揃えるための行列
+  tmp1 <- apply(Pairs,1,which.max)
+  tmp2 <- which(tmp1 > 1:n)
+  tmp.Pairs <- tmp1
+  tmp.Pairs[tmp2] <- tmp2 
+  #tmp3 <- (1:n)[-tmp2]
+  #tmp.Pairs <- matrix(0,n,n)
+  #tmp.Pairs[tmp2,tmp2] <- diag(rep(1,length(tmp2))) 
+  #tmp.Pairs[tmp3,] <- Pairs[tmp3,]
+  
+  # トリオ取り出し
+  trios<- cbind(1:n,t(apply(W,1,function(x){which(x==1)})))
+  
+  # 有効辺IDを小さい方に揃える
+  trios. <- matrix(tmp.Pairs[trios],ncol=3)
+  trios. <- t(apply(trios.,1,sort))
+  
+  return(trios.)
+}
+
+```
+```{r}
+trios <- my.W2G(W$W, W$Pairs)
+```
+```{r}
+gR <- graph.adjacency(RL.both$R) 
+gL <- graph.adjacency(RL.both$L) 
 ```
 ```{r}
 plot(gR)
