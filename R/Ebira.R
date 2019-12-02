@@ -14,13 +14,13 @@ my.x.mut <- function(X,B,k=1:length(B[,1])){
 			if(j != k[i]){
 				b1 <- B[j,k[i]]
 				b2 <- B[k[i],j]
-				if(b1 > b2){
+				#if(b1 > b2){
 					tmp1 <- tmp1 * X[[j]]^my.non.negative(b1)
 					tmp2 <- tmp2 * X[[j]]^my.non.negative(b2)
-				}else{
-					tmp1 <- tmp1 * X[[j]]^my.non.negative(b2)
-					tmp2 <- tmp2 * X[[j]]^my.non.negative(b1)
-				}
+				#}else{
+				#	tmp1 <- tmp1 * X[[j]]^my.non.negative(b2)
+				#	tmp2 <- tmp2 * X[[j]]^my.non.negative(b1)
+				#}
 				
 			}
 		}
@@ -47,7 +47,7 @@ my.y.mut <- function(Y,B,k=1:length(B[,1])){
 				ret[[i]][[j]] <- 1/Yk
 			}else{
 				b <- B[j,k[i]]
-				ret[[i]][[j]] <- Y[[j]] * (1+Yk^sign(b))^b
+				ret[[i]][[j]] <- Y[[j]] * (1+Yk^sign(-b))^(-b)
 			}
 		}
 		ret[[i]][[j]] <- Simplify(ret[[i]][[j]])
