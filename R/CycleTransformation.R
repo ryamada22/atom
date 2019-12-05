@@ -52,5 +52,105 @@ matplot(theta,X,type="l")
 
 
 # 3線分間距離が L のとき、間の２点を動かしたい
-L <- runif(3)
+L <- runif(1)*3
+#L <- 1.1
+theta1 <- runif(1) * pi/2
+#theta1 <- pi/2 * 0.95
+A <- cos(theta1)
+B <- sin(theta1)
 
+x1 <- 1/2 * (L-A + B * sqrt((3+2*L*A-L^2)/(L^2-2*L*A+1)))
+x2 <- 1/2 * (L-A - B * sqrt((3+2*L*A-L^2)/(L^2-2*L*A+1)))
+
+y1 <- sqrt(1-x1^2)
+y2 <- sqrt(1-x2^2)
+
+C1 <- L-x1
+D1 <- y1
+C2 <- L-x2
+D2 <- y2
+
+
+(A-C1)^2 + (B-D1)^2
+(A-C2)^2 + (B-D2)^2
+
+
+#############
+
+L <- 2 + runif(1)
+thetas <- seq(from = 0, to = 1, length=101) * pi/2
+
+V1 <- V2 <- V3 <- matrix(0,length(thetas),2)
+
+thetas2_1 <- thetas2_2 <- rep(0,length(thetas))
+
+ones2 <- ones3 <- rep(FALSE,length(thetas))
+
+for(i in 1:length(thetas)){
+	theta1 <- thetas[i]
+	A <- cos(theta1)
+	B <- sin(theta1)
+
+	x1 <- 1/2 * (L-A + B * sqrt((3+2*L*A-L^2)/(L^2-2*L*A+1)))
+	x2 <- 1/2 * (L-A - B * sqrt((3+2*L*A-L^2)/(L^2-2*L*A+1)))
+
+	y1 <- sqrt(1-x1^2)
+	y2 <- sqrt(1-x2^2)
+
+	C1 <- L-x1
+	D1 <- y1
+	C2 <- L-x2
+	D2 <- y2
+	
+	V1[i,] <- c(A,B)
+	V2[i,] <- c(C1,D1)
+	V3[i,] <- c(C2,D2)
+	
+	thetas2_1[i] <- acos(x1)
+	thetas2_2[i] <- acos(x2)
+	
+	# 中央の線分の長さが１であることの確認
+	if(abs((A-C1)^2+(B-D1)^2-1)<10^(-6)){
+		ones2[i] <- TRUE
+	}
+	if(abs((A-C2)^2+(B-D2)^2-1)<10^(-6)){
+		ones3[i] <- TRUE
+	}
+}
+
+
+plot(rbind(c(0,0),c(L,0),V1,V2,V3),xlim = c(-1,L),ylim=c(-1,L),pch=20,cex=0.1)
+for(i in 1:length(thetas)){
+	if(ones2[i]){
+		segments(V1[i,1],V1[i,2],V2[i,1],V2[i,2],col=2)
+		segments(V2[i,1],V2[i,2],L,0,col=1)
+		segments(V1[i,1],V1[i,2],0,0,col=1)
+	}
+	if(ones3[i]){
+		segments(V1[i,1],V1[i,2],V3[i,1],V3[i,2],col=3)
+		segments(V3[i,1],V3[i,2],L,0,col=1)
+		segments(V1[i,1],V1[i,2],0,0,col=1)
+	}
+}
+
+plot(rbind(c(0,0),c(L,0),V1,V2,V3),xlim = c(-1,L),ylim=c(-1,L),pch=20,cex=0.1)
+for(i in 1:length(thetas)){
+	if(ones2[i]){
+		segments(V1[i,1],V1[i,2],V2[i,1],V2[i,2],col=i)
+		segments(V2[i,1],V2[i,2],L,0,col=i)
+		segments(V1[i,1],V1[i,2],0,0,col=i)
+	}
+	if(ones3[i]){
+		segments(V1[i,1],V1[i,2],V3[i,1],V3[i,2],col=i)
+		segments(V3[i,1],V3[i,2],L,0,col=i)
+		segments(V1[i,1],V1[i,2],0,0,col=i)
+	}
+}
+
+plot(thetas[ones2],thetas2_1[ones2],type="l",col=2,ylim=c(0,pi/2))
+points(thetas[ones3],thetas2_2[ones3],type="l",col=3)
+
+
+#matplot(thetas,cbind(thetas2_1,thetas2_2),type="l")
+
+plot(thetas + thetas2_1) # 一定なわけではない
