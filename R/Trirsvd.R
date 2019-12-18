@@ -69,14 +69,14 @@ my.Einfo <- function(f){
 		}
 	}
 	# eid は3k本のエッジ、e2は6k本のエッジ
-	return(list(eid.stend = eid.stend,eid.EV = eid.E.V,regM = regM, regM.v = regM.v, e2.stend = el,e2.EV = E.V,e.pair = e.pair,e2.iddir = eid.dir,e2.trio = edge.trio))
+	return(list(eid.stend = eid.stend,eid.EV = eid.E.V,regM = regM, regM.v = regM.v, e2.stend = el,e2.EV = E.V,e.pair = e.pair,e2.iddir = eid.dir,e2.trio = edge.trio,ne=ne))
 }
 
 e.info <- my.Einfo(f)
 
 my.rsvd.tri <- function(X3,f,k=3,eps=10^(-10),maxiter=10000){
 	e.info <- my.Einfo(f)
-	
+	ne <- e.info$ne
 	regM <- e.info$regM
 	regM.v <- e.info$regM.v
 	
