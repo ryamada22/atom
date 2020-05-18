@@ -1,0 +1,392 @@
+---
+title: "双曲幾何空間座標のポアンカレ円板埋め込み"
+author: "ryamada"
+date: "2020年4月8日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+library(knitr)
+library(rsvd)
+library(matlib)
+library(plot3D)
+knitr::opts_chunk$set(echo = TRUE)
+knit_hooks$set(webgl = hook_webgl)
+```
+
+## Hyperboloid モデル
+
+$$
+x^2 - z^2 = -1\\
+z > 0
+$$
+という双曲線を考える。
+
+この双曲線上の2点$u=(x_u,z_u),v=(x_v,z_v)$との2点間の距離は、内積を定める行列が
+$$
+M=\left [
+\begin{array}{rrr}
+1 & 0 & 0\\
+0 & 1 & 0\\
+0 & 0 &-1
+\end{array}
+\right]
+$$
+である時には、双曲線に沿って引いた「曲線」が最短距離となり、
+３次元ユークリッド直線距離は最短距離にならないことを確かめる。
+
+
+```{r}
+u <- c(0,1)
+v <- c(2,sqrt(5))
+```
+```{r}
+x <- seq(from=0,to=2,length=1000)
+z <- sqrt(1+x^2)
+```
+```{r}
+# X's colum vectors stand for points' coordinate
+my.dist.IP <- function(X,M){
+  IP <- t(X) %*% M %*% X 
+  n <- length(X[1,])
+  D <- matrix(rep(diag(IP),n),ncol=n) + matrix(rep(diag(IP),n),byrow=TRUE,ncol=n) - 2 * IP
+  return(D)
+}
+```
+```{r}
+M <- matrix(c(1,0,0,-1),ncol=2)
+X <- cbind(x,z)
+D <- my.dist.IP(t(X),M)
+```
+```{r}
+plot(cumsum(D[1,]))
+```
+
+u,v間のユークリッド直線
+```{r}
+x. <- x
+z. <- (sqrt(5)-1) * x./2+1
+X. <- cbind(x.,z.)
+D. <- my.dist.IP(t(X.),M)
+matplot(cbind(cumsum(D[1,]),cumsum(D.[1,])),type="l")
+```
+## 概説
+
+* 内積・距離に関して均質な空間がある
+* 内積が、(実)対角行列$M$を用いて、$x^T M y$で与えられる
+* 双曲幾何的空間では、Mの固有値に負のものがある
+* 双曲幾何空間はユークリッド幾何空間よりも広いので、ユークリッド幾何空間で視覚化するには、工夫が必要となる(球面幾何空間はユークリッド幾何空間より狭いので、視覚化することが可能。例えば、球面を描いてしまえる)
+* 双曲幾何的空間におけるある点での距離を、その点の原点から距離が遠いほど、ユークリッド空間で短くするという工夫によって実現するのが、双曲面モデルである
+* さらに、それを、単位(n次元)円板に射影したものがポアンカレディスクモデルである
+
+## 2次元多様体が3次元座標で表されている場合
+
+以下のような標準的な内積定義行列を持つ2次元多様体とする。
+
+
+$$
+M = \left[
+\begin{array}{rrr}
+1 & 0 & 0\\
+0 & 1 & 0\\
+0 & 0 & -1 \\
+\end{array}
+\right]
+$$
+内積行列を用いた、「距離」の計算関数を作っておく。
+
+```{r}
+# X's colum vectors stand for points' coordinate
+my.dist.IP <- function(X,M){
+  IP <- t(X) %*% M %*% X 
+  n <- length(X[1,])
+  D <- matrix(rep(diag(IP),n),ncol=n) + matrix(rep(diag(IP),n),byrow=TRUE,ncol=n) - 2 * IP
+  return(D)
+}
+```
+
+```{r}
+M <- diag(c(1,1,-1))
+X <- rbind(0:10,rep(0,11),rep(0,11))
+Y <- rbind(0:10,0:10,rep(3,11))
+XY <- cbind(X,Y)
+D <- my.dist.IP(XY,M)
+image(D)
+```
+
+## DEEF packageの例
+
+```{r}
+library(deef)
+P <- Distset2D$P
+ip_mat <- Distset2D$ip_mat
+result <- DEEF(Distset2D$P,Distset2D$ip_mat)
+eigen_value <- result$eigenvalue
+Theta <- result$Theta
+Fx <- result$Fx
+Cx <- result$Cx
+
+Theta. <- Theta[,order(abs(eigen_value),decreasing=T)[1:3]]
+Theta. <- Theta.[,c(2,3,1)]
+
+library(rgl)
+plot3d(Theta.)
+
+M <- diag(c(1,1,-1)) # 内積定義行列
+
+IP <- Theta. %*% M %*% t(Theta.)
+
+image(IP)
+
+# X's colum vectors stand for points' coordinate
+my.dist.IP <- function(X,M){
+  IP <- t(X) %*% M %*% X 
+  n <- length(X[1,])
+  D <- matrix(rep(diag(IP),n),ncol=n) + matrix(rep(diag(IP),n),byrow=TRUE,ncol=n) - 2 * IP
+  return(D)
+}
+
+D <- my.dist.IP(t(Theta.),M)
+
+
+image(D)
+
+tmp <- apply(Theta.[,1:2]^2,1,sum)
+Theta.. <- cbind(Theta.[,1:2],-sqrt(tmp+1))
+tmpz <- Theta.[,3] - Theta..[,3]
+
+plot3d(Theta..)
+
+IP. <- Theta.. %*% M %*% t(Theta..)
+plot(diag(IP.)) # すべて -1 ; x1^2 + x2^2 - x3^2 = -1 というhyperbolic curved surface
+
+D2 <- my.dist.IP(t(Theta..),M)
+
+diag(D2)
+
+# ポアンカレディスク座標
+
+Poicr <- Theta..[,1:2]/(1-Theta..[,3])
+
+plot(Poicr) # 2D
+
+Poicr3D <- cbind(Poicr,tmpz)
+plot3d(Poicr3D)
+```
+#######
+```{}
+library(flowCore)
+library(TDA)
+
+data(GvHD)
+n <- length(GvHD)
+expr_list <- list()
+for(i in 1:n){
+  samp <- GvHD[[i]]
+  expr_list[[i]] <- asinh(samp@exprs[,c('FL1-H','FL2-H')])
+}
+
+#the num of marker(d)=2,the num of grids (m)=100
+d <- 2
+m <- 100
+min_list <- lapply(1:d,function(x){NULL})
+max_list <- lapply(1:d,function(x){NULL})
+alpha <- 0.15
+for(i in 1:n){
+  expr <- expr_list[[i]]
+  for(j in 1:d){
+    min_list[[j]] <- c(min_list[[j]],quantile(expr[,j],alpha))
+    max_list[[j]] <- c(max_list[[j]],quantile(expr[,j],1-alpha))
+  }
+}
+
+seq_list <- list()
+for(j in 1:d){
+  total_min <- min(min_list[[j]])
+  total_max <- max(max_list[[j]])
+  seq_list[[j]] <- seq(from=total_min,to=total_max,length=m)
+}
+
+#Generate Grid matrix
+code <- "x_grid <- expand.grid("
+for(i in 1:d){
+  if(i != d) code <- paste0(code,"seq_list[[",i,"]],")
+  if(i == d) code <- paste0(code,"seq_list[[",i,"]])")
+}
+eval(parse(text=code))
+
+#knn estimate and generate P
+P <- matrix(NA,n,m^d)
+for(i in 1:n){
+  expr <- expr_list[[i]]
+  knni <- knnDE(expr, x_grid, k=100)
+  P[i,] <- knni/sum(knni)
+}
+
+ip_mat <- P %*% t(P)
+result <- DEEF(P,ip_mat)
+eigen_value <- result$eigenvalue
+Theta <- result$Theta
+Fx <- result$Fx
+Cx <- result$Cx
+
+Theta. <- Theta[,order(abs(eigen_value),decreasing=T)[1:3]]
+Theta. <- Theta.[,c(2,3,1)]
+
+library(rgl)
+plot3d(Theta.)
+
+M <- diag(c(1,1,-1)) # 内積定義行列
+
+IP <- Theta. %*% M %*% t(Theta.)
+
+image(IP)
+
+# X's colum vectors stand for points' coordinate
+my.dist.IP <- function(X,M){
+  IP <- t(X) %*% M %*% X 
+  n <- length(X[1,])
+  D <- matrix(rep(diag(IP),n),ncol=n) + matrix(rep(diag(IP),n),byrow=TRUE,ncol=n) - 2 * IP
+  return(D)
+}
+
+D <- my.dist.IP(t(Theta.),M)
+
+
+image(D)
+# IPの対角成分は、各分布の内積 ip
+# x1^2 + x2^2 - x3^2 = (内積)となっており
+# 各分布は、x1^2 + x2^2 - x3^2 = K という双曲面上の点
+# もし、すべての分布の内積が等しく -1 ならば
+# すべての分布がx1^2 + x2^2 - x3^2 = -1 という双曲面に乗っており
+# それはいたるところで負の曲率が-1の双曲幾何空間のモデルそのものであるから
+# 各分布に対応する点ををすべて、１枚のポアンカレディスクに写像できる
+# しかしながら、分布ごとに、自己内積の値が異なるのでそうはできない
+# 自己内積の値ごとに異なる、双曲面に乗っていることにして(これが良いことかどうかは吟味が必要)
+# いったん、負固有値座標を変更して、すべてのΘ座標をx1^2 + x2^2 - x3^2 = -1に移す
+# その上で、双曲面モデルとポアンカレディスクモデルとの座標変換式を用いて
+# ２次元平面座標を算出する
+# 最後に、双曲面をずらした分だけ、第３軸の値を戻してやることにする
+
+tmp <- apply(Theta.[,1:2]^2,1,sum)
+Theta.. <- cbind(Theta.[,1:2],-sqrt(tmp+1))
+tmpz <- Theta.[,3] - Theta..[,3]
+
+plot3d(Theta..)
+
+IP. <- Theta.. %*% M %*% t(Theta..)
+plot(diag(IP.)) # すべて -1 ; x1^2 + x2^2 - x3^2 = -1 というhyperbolic curved surface
+
+D2 <- my.dist.IP(t(Theta..),M)
+
+diag(D2)
+
+# ポアンカレディスク座標
+
+Poicr <- Theta..[,1:2]/(1-Theta..[,3])
+
+plot(Poicr) # 2D
+
+Poicr3D <- cbind(Poicr,tmpz)
+plot3d(Poicr3D)
+
+```
+```{r}
+x <- seq(from=-100,to=100,length=10000)
+n <- 50
+P <- matrix(0,n,length(x)) 
+for(i in 1:n){
+  P[i,] <- dnorm(x,i,1)
+}
+P <- P/apply(P,1,sum)
+
+P2 <- matrix(0,n,length(x))
+for(i in 1:n){
+  P2[i,] <- dnorm(abs(x),i,1)
+}
+P2 <- P2/apply(P2,1,sum)
+
+P3 <- matrix(0,n,length(x))
+for(i in 1:n){
+  #P3[i,] <- dnorm(cos(x/10)*x,cos(i),1)
+  P3[i,] <- dnorm(x,0,(i+10)*0.1)
+}
+P3 <- P3/apply(P3,1,sum)
+
+P <- rbind(P,P2,P3)
+```
+```{r}
+#knn estimate and generate P
+
+ip_mat <- P %*% t(P)
+result <- DEEF(P,ip_mat)
+eigen_value <- result$eigenvalue
+Theta <- result$Theta
+Fx <- result$Fx
+Cx <- result$Cx
+
+plot(eigen_value)
+
+Theta. <- Theta[,order(abs(eigen_value),decreasing=T)[1:3]]
+Theta. <- Theta.[,c(2,3,1)]
+
+library(rgl)
+plot3d(Theta.)
+
+M <- diag(c(1,1,-1)) # 内積定義行列
+
+IP <- Theta. %*% M %*% t(Theta.)
+
+image(IP)
+
+# X's colum vectors stand for points' coordinate
+my.dist.IP <- function(X,M){
+  IP <- t(X) %*% M %*% X 
+  n <- length(X[1,])
+  D <- matrix(rep(diag(IP),n),ncol=n) + matrix(rep(diag(IP),n),byrow=TRUE,ncol=n) - 2 * IP
+  return(D)
+}
+
+D <- my.dist.IP(t(Theta.),M)
+
+
+image(D)
+# IPの対角成分は、各分布の内積 ip
+# x1^2 + x2^2 - x3^2 = (内積)となっており
+# 各分布は、x1^2 + x2^2 - x3^2 = K という双曲面上の点
+# もし、すべての分布の内積が等しく -1 ならば
+# すべての分布がx1^2 + x2^2 - x3^2 = -1 という双曲面に乗っており
+# それはいたるところで負の曲率が-1の双曲幾何空間のモデルそのものであるから
+# 各分布に対応する点ををすべて、１枚のポアンカレディスクに写像できる
+# しかしながら、分布ごとに、自己内積の値が異なるのでそうはできない
+# 自己内積の値ごとに異なる、双曲面に乗っていることにして(これが良いことかどうかは吟味が必要)
+# いったん、負固有値座標を変更して、すべてのΘ座標をx1^2 + x2^2 - x3^2 = -1に移す
+# その上で、双曲面モデルとポアンカレディスクモデルとの座標変換式を用いて
+# ２次元平面座標を算出する
+# 最後に、双曲面をずらした分だけ、第３軸の値を戻してやることにする
+
+tmp <- apply(Theta.[,1:2]^2,1,sum)
+Theta.. <- cbind(Theta.[,1:2],-sqrt(tmp+1))
+tmpz <- Theta.[,3] - Theta..[,3]
+
+plot3d(Theta..)
+
+IP. <- Theta.. %*% M %*% t(Theta..)
+plot(diag(IP.)) # すべて -1 ; x1^2 + x2^2 - x3^2 = -1 というhyperbolic curved surface
+
+D2 <- my.dist.IP(t(Theta..),M)
+
+diag(D2)
+
+# ポアンカレディスク座標
+
+Poicr <- Theta..[,1:2]/(1-Theta..[,3])
+
+plot(Poicr) # 2D
+
+Poicr3D <- cbind(Poicr,tmpz)
+plot3d(Poicr3D)
+```
+
+

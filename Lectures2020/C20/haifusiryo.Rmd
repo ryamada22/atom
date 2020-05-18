@@ -2,7 +2,8 @@
 title: "データ解析の数学(C20 医療情報学 2020)"
 author: "ryamada"
 date: "2020年6月12日"
-output: html_document
+output:
+  html_document:
 ---
 
 ## はじめに

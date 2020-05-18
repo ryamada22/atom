@@ -1,0 +1,94 @@
+---
+title: "DEEF-like decomposition of functions"
+author: "ryamada"
+date: "2020/4/23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## samples are functions
+
+複数の関数$f_1(x),f_2(x),....,f_N(x)$の観察がなされたとする。
+```{r}
+# sample size : number of functions
+N <- 100
+# observation points
+x <- seq(from=0,to=10,length=500)
+# Obs
+X <- matrix(0,nrow=length(x),ncol=N)
+
+
+for(i in 1:N){
+  tmp1 <- runif(1) * (i%%3) * 0.5 # 3の剰余で群分け
+  tmp2 <- runif(1) + (i%%3) * pi
+  X[,i] <- sin(tmp1 * x + tmp2)
+}
+# ランダムエラーを少し入れる
+X. <- X + rnorm(length(X),0,0.1)
+```
+```{r}
+matplot(X,type="l")
+matplot(X.,type="l")
+```
+
+内積行列
+```{r}
+P <- t(X.) %*% X. * diff(x)[1]^2
+image(P)
+heatmap(P) # それなりに３群に分かれる
+```
+
+内積分解
+```{r}
+eigen.out <- eigen(P)
+plot(eigen.out[[1]]) # 固有値は正のようだ
+```
+
+正規直交基底に分解されている
+```{r}
+image(t(eigen.out[[2]]) %*% eigen.out[[2]])
+```
+
+特定のxの値における特徴関数$F_i(x)$の値が求めたい
+$$
+H^T H = P\\
+\begin{pmatrix}f_1,f_2,...,f_N \end{pmatrix} = \begin{pmatrix}F_1,F_2,...,F_N \end{pmatrix} H
+$$
+```{r}
+H <- diag(sqrt(eigen.out[[1]])) %*% t(eigen.out[[2]])
+range(t(H) %*% H - P) # H^T H = P の確認
+```
+
+観察されたxに対応する抽出特徴関数Fの値なら、以下で簡単に出る。
+```{r}
+F <- X. %*% solve(H)
+```
+
+固有値が小さい特徴関数はノイズばかりで表されている。
+
+```{r}
+k <- 6
+matplot(F[,1:k],type="l")
+```
+
+個々の観察データについて、補完をすれば、観測していないxについても、観測関数標本ごとに値が決まる。
+
+それが決まれば以下のようにして出せる。
+
+例えば、x[15]と[26]との中間点の各観察値を、線形補完で取れば
+
+```{r}
+tmpx1 <- 25
+tmpx2 <- 26
+hokan.x12 <- (X.[tmpx1,] + X.[tmpx2,])/2
+
+F.x12 <- matrix(hokan.x12,nrow=1) %*% solve(H)
+```
+
+```{r}
+matplot(x,F[,1:k],type="l")
+points(rep((x[tmpx1]+x[tmpx2])/2,k),F.x12[1,1:k],col=2,pch=20,cex=1)
+```

@@ -10,7 +10,7 @@ library(rgl)
 library(knitr)
 library(rsvd)
 library(matlib)
-library(plot3D)
+#library(plot3D)
 knitr::opts_chunk$set(echo = TRUE)
 knit_hooks$set(webgl = hook_webgl)
 ```
@@ -202,7 +202,7 @@ my.Einfo <- function(f){
 #                エッジベクトルが算出される
 # e.info$regM: エッジ内積行列のうち、1,-0.5,+0.5の制約のあるセルに1を立てた行列
 # e.info$regM.v: 制約のあるセルに制約値(1,-0.5,+0.5)の値を持った行列
-my.rsvd.triCycle <- function(X3,f,k=3,eps=10^(-10),maxiter=10000,n.pinv = 100){
+my.rsvd.triCycle <- function(X3,f,k=3,eps=10^(-8),maxiter=1000,n.pinv = 100){
 	e.info <- my.Einfo(f)
 	ne <- e.info$ne
 	regM <- e.info$regM
@@ -427,11 +427,46 @@ sum(eigen.out2[[1]])
 以下の関数は、三角形メッシュの向き付き三角形頂点情報行列を入力として取り、
 １つの三角形をランダムに選び、その選ばれた三角形の３辺のうちの１つをランダムに選び、そのエッジの向きを変えることで得られる、三角形メッシュの頂点情報行列を返すものである。
 
-```{r}
-my.random.tri.mut <- function(f){
+```{}
+my.random.tri.mut_old1 <- function(f){
 	nf <- length(f[,1])
 	f1 <- sample(1:nf,1)
 	e1 <- sample(1:3,1)
+	vs <- c(f[f1,],f[f1,1])[c(e1,e1+1)]
+	
+	f12 <- which(apply(t(f)-vs[1],2,prod)==0 & apply(t(f)-vs[2],2,prod)==0)
+	
+	f2 <- f12[which(f12 != f1)]
+
+	e2 <- which(f[f2,] == vs[1])
+	
+	f1. <- c(f[f1,],f[f1,])
+	f2. <- c(f[f2,],f[f2,])
+	
+	newf1 <- c(f1.[e1],f2.[e2+1],f1.[e1+2])
+	newf2 <- c(f1.[e1+1],f1.[e1+2],f2.[e2+1])
+	
+	new.f <- f
+	new.f[f1,] <- newf1
+	new.f[f2,] <- newf2
+	
+	return(new.f)
+}
+```
+```{r}
+# 選ぶエッジの両端頂点は次数が減るので、減る前の次数が４以上でなくてはならない
+# その制約を入れる
+my.random.tri.mut <- function(f){
+	nf <- length(f[,1])
+	deg <- table(f)
+	ok.v <- which(deg>=4)
+	el <- rbind(f[,1:2],f[,2:3],f[,c(3,1)])
+	ok.e <- which(el[,1] %in% ok.v & el[,2] %in% ok.v)
+	chosen.e <- sample(ok.e,1) 
+	f1 <- chosen.e %% nf
+	e1 <- chosen.e %/% nf + 1
+	#f1 <- sample(1:nf,1)
+	#e1 <- sample(1:3,1)
 	vs <- c(f[f1,],f[f1,1])[c(e1,e1+1)]
 	
 	f12 <- which(apply(t(f)-vs[1],2,prod)==0 & apply(t(f)-vs[2],2,prod)==0)
@@ -531,4 +566,25 @@ e.xyz3 <- eigen(out.q3$IPmat)[[1]]
 e.vecs <- rbind(eigen.out1[[1]],eigen.out2[[1]],e.xyz1,e.xyz2,e.xyz3)
 plot3d(rbind(c(0,0,0),c(30,30,30)))
 spheres3d(e.vecs[,1:3],radius=0.5,col=4)
+```
+
+
+## フィボナッチ球面格子からの正三角形化
+```{r}
+# devtools::install_github("ryamada22/Ronryryamada")
+library(Ronlyryamada) 
+sp.mesh <- my_sphere_tri_mesh(n.psi=6)
+f <- sp.mesh$triangles
+x <- sp.mesh$xyz
+el <- rbind(f[,1:2],f[,2:3],f[,c(3,1)])
+```
+
+```{r,webgl=TRUE}
+my.plot.polygon(x,el,f)
+```
+```{r}
+sp.equi <- my.rsvd.triCycle(x,f)
+my.equilateral.plot(sp.equi)
+plot(eigen(sp.equi$IPmat)[[1]])
+sum(eigen(sp.equi$IPmat)[[1]])
 ```
