@@ -1,0 +1,102 @@
+---
+title: "正規直交基底分解と内積行列 OrthogonalBasisDecompostionAndInnerProductMatrix"
+author: "ryamada"
+date: "2020/5/25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 正規直交基底分解 Orthogonal Basis Decomposition
+
+正規直交基底分解には色々ある。PCA、フーリエ変換、球面調和関数分解が例である。
+
+There are many orthogonal basis decompostions, such as PCA, Fourrier decomposition, Spherical harmonics decomposition.
+
+そうした分解基底の２要素は相互に直交している、言い換えると、２要素の内積は０である。
+
+Two elements in their decomposition bases are mutually orthogonal, i.e., their inner product is 0.
+
+## 有限次元、無限次元 Finite Dimensions and Infinite Dimensions
+
+上記の話は、有限次元分解・有限次元直交基底で、無限次元分解・無限次元直交基底でも言えることである。
+
+The statements above are true for both finite dimensional cases and infinite dimensional cases.
+
+## 正規直交基底分解係数から内積行列 Inner Product Matrix is calculable from Orthogonal Basis Coefficients
+
+### 正規直交基底分解 Orthogonal Basis Decomposition
+
+正規直交基底$E = (e_1,e_2,...,e_n)$ (関数の場合は$E(x) = (e_1(x),e_2(x),...,e_n(x)))$)とする。
+
+Assume an orthogonal basis $E = (e_1,e_2,...,e_n)$, or its function version $E(x) = (e_1(x),e_2(x),...,e_n(x)))$.
+
+$$
+f_k(x) = \sum_{i=1}^n a_{k,i} e_i(x),
+$$
+
+ただし$<e_i(x),e_j(x) > = \delta_{ij}$。
+
+where $<e_i(x),e_j(x) > = \delta_{ij}$.
+
+### 内積 Inner Product 
+
+$$
+<f_p(x), f_q(x) > = <\sum_{i=1}^n a_{p,i} e_i(x), \sum_{j=1}^n a_{q,j} e_j(x)\\
+= \sum_{i=1}^n \sum_{j=1}^n a_{p,i}a_{q,j} e_i(x) e_j(x)\\
+= \sum_{i=1}^n \sum_{j=1}^n a_{p,i}a_{q,j} \delta_{ij}\\
+= _sum_{i=1}^n a_{p,i} a_{q,i}\\
+= <A_p,A_q>,
+$$
+
+where $A_p = (a_{p,1},a_{p,2},...), A_q = (a_{q,1},a_{q,2},...)$.
+
+したがって、何かの拍子に、関数ペアの内積の計算が簡単ではなくとも、関数の直交基底分解が得られているとき、関数ペアの内積は直交基底分解係数列から算出できることになる。
+
+Therefore if pairwise inner products among functions are difficult to calculate, but their orthogonal basis decompositions are available, their inner product matrix is calculable. 
+
+DEEF(など)は内積行列が得られれば座標付与・データ・ドリブンなノンパラメトリック分解ができるので、その方向への接続が可能かもしれない。
+
+Because DEEF (and some other procedures) can calculate coordinates of functions in the fashion of data-driven/non-parametric way, this idea may expand the application of DEEF.
+
+## もう１点 One more topic
+
+### 直交多項式基底 Orthogonal polynomial basis
+
+正規直交基底が関数基底である場合、その分解係数は以下で与えられる。
+
+In case of function decomposition, coefficients of decomposition are given as,
+
+$$
+a_{k,i} =\int e_i(x) f_k(x) dx
+$$
+
+正規直交基底の個々の基底関数が多項式関数であることもある。
+
+The orthogonal basis functions may be polynomial functions.
+
+https://en.wikipedia.org/wiki/Orthogonal_functions 
+
+### モーメント Moments
+
+他方、確率分布の関数には、モーメントが重要視される。モーメント列は確率変数を定めるとも言い換えられる。
+
+On the other hand, the moments are important for probability distribution functions. The sequence of moments can be said to specify probability variables.
+
+モーメントの定義式は以下の通りである。
+
+The formula of moments are as below.
+
+$$
+M_k(f(x)) = \int x^k f(x) dx
+$$
+
+関数列$(x,x^2,x^3,...)$は相互に直交ではないので、モーメント列$(M_1(f(x)),M_2(f(x)),...)$をそのまま用いて、関数内積は求まらない。
+
+Because the sequence of functions $(x,x^2,x^3,...)$ is not mutually orthogonal, the sequence of moments $(M_1(f(x)),M_2(f(x)),...)$ is not ready to calculate inner product of two functions.
+
+しかしながら、関数列$(x,x^2,x^3,...)$が直交ではないにしろ、線型独立であるので、比較的簡単な工夫によりモーメント列を、何かしらの関数空間（例えば、非直交基底が張る空間の点と皆してやり、その空間での内積・距離の定義が線形に計算であるなど）のために使えるのではないか…と言うぼんやりとした予感があります。
+
+However the sequence of functions $(x,x^2,x^3,...)$ is not orthogonal but linearly independent, therefore, the sequence of moments can be used as coordinates in a kind of space of functions (e.g., a space spanned by non-orthogonal basis and inner products/distances in the space is somehow defined linearly) ... a vague idea, yet.

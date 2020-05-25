@@ -1,0 +1,12 @@
+---
+title: "Embedding of Sqrt of distributions"
+author: "ryamada"
+date: "2020年6月12日"
+output:
+  html_document:
+---
+## probability distributions
+
+$$
+
+$$
