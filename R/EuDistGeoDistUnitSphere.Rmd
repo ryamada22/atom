@@ -1,0 +1,53 @@
+---
+title: "SphereTwoPoints"
+author: "ryamada"
+date: "2020/5/27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(rgl)
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE)
+knit_hooks$set(webgl = hook_webgl)
+```
+
+## R Markdown
+
+```{r}
+n.pt <- 10^3
+
+# Uniform random points on the unit sphere
+X <- matrix(rnorm(n.pt*3),ncol=3)
+X <- X/sqrt(apply(X^2,1,sum))
+```
+
+```{r,webgl=TRUE}
+
+plot3d(X)
+```
+
+```{r}
+# Euclidean distance matrix
+d.eu <- as.matrix(dist(X))
+hist(d.eu)
+```
+
+```{r}
+# Inner Product Matrix
+IP <- X %*% t(X)
+# Adjustment of computer-calculation residuals more than 1 or less than -1
+IP[which(IP > 1)] <- 1
+IP[which(IP < -1)] <- -1
+hist(IP)
+```
+
+```{r}
+# Convert to geodegic distance (inner product = cos(theta); d.geo = theta)
+d.geo <- acos(IP)
+hist(d.geo)
+```
+
+```{r}
+plot(d.eu,d.geo)
+```

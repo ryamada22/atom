@@ -1,0 +1,90 @@
+---
+title: "LU decomposition and calculation complexity"
+author: "ryamada"
+date: "2020/5/26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## $1^2+2^2 +... = \sum_{i=1}^n i^2$
+
+Let's calculate for n = 1,2,3...
+
+```{r}
+ns <- 1:100
+
+vs <- rep(0,length(ns))
+
+for(i in 1:length(ns)){
+  vs[i] <- sum((1:i)^2)
+}
+
+plot(ns,vs)
+plot(ns,log10(vs),ylab="log10")
+```
+
+## How about $\frac{1}{3} n^3
+
+```{r}
+ws <- rep(0,length(ns))
+for(i in 1:length(ns)){
+  ws[i] <- 1/3 * i^3
+}
+plot(ns,ws)
+plot(ns,log10(ws),ylab="log10")
+```
+
+## Plot two value series together
+
+They are essentially the same.
+
+```{r}
+vws <- cbind(vs,ws)
+
+matplot(ns,vws,type="l")
+matplot(ns,log10(vws),type="l",ylab="log10")
+```
+
+## Addendum
+
+The sequence of integers can be checked @ https://oeis.org/?language=chineseS .
+
+$\sum_{i=1}^n i^2$ is;
+```{r}
+vs
+```
+
+Input the initial several values 1,5,14,...,into the query box of the site.
+
+It returns the sequence ID https://oeis.org/A000330 .
+
+It tells you that $\sum_{i=0}^n i^2 = 0^2 + 1^2 + ... + = n(n+1)(2n+1)/6$
+
+You can double check this formula as below.
+
+```{r}
+vs2 <- rep(0,length(ns)) 
+for(i in 1:length(ns)){
+  vs2[i] <- i*(i+1)*(2*i+1)/6
+}
+vs2
+plot(vs,vs2)
+abline(0,1,col=2)
+```
+
+How about $\frac{1}{3}n^3$? The sequence is not integers, so the integer sequence site can not be used.
+
+## Compare the formulae
+
+Let's compare two formulae; $n(n+1)(2n+1)/6$ and $1/3 n^3$
+
+$$
+n(n+1)(2n+1)/6 = (2n^3 + 3n^2 + n)/6 = n^3/3 + n^2/2 + n/6
+$$
+
+Because $n^2/2 + n/6$ gets too small compared to $n^3/3$, when n gets big, therefore the number of steps is said to increase as like $n^3/3$.
+
+
