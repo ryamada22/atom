@@ -1,0 +1,132 @@
+---
+title: "Skeleton of Andrew’s paper"
+author: "ryamada"
+date: "2020/5/29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+* Shapes are good targets of data analysis in many fields, including life science.
+* Two dimensional shapes are closed curves in 2D plane and three dimensional shapes are closed curved surfaces in 3D space.
+* We propose a method to treat shapes as random number generators.
+* Random number generators are to be handled as probability distributions.
+* The comparison of shapes are converted to the comparison of probability distributions.
+
+## Methods
+
+### Shapes are random number generators
+
+Assume to pick two random points $X_i,X_j$ from a shape (a manifold).
+
+Let $D_e(X_i,X_j)$ and $D_g(X_i,X_j)$ denote their Euclideian distance and geodesic distance, respectively.
+
+$W(X_i,X_j) = (D_e(X_i,X_j),D_g(X_i,X_j))$ is a random points in 2-dimensional space.
+
+The distribution of $W$ depends on the shape.
+
+### Dimension of Shapes
+
+A closed curve in 2D plane is a shape in 2D.
+
+A closed curved surface in 3D space is a shape in 3D.
+
+The shape dimension can be increased.
+
+### Theoretical approach to 2D shape
+
+A closed curve is parameterized with $t \in [0,1)$, as;
+
+$$
+z(t) = (x(t),y(t)),
+$$
+
+where $x(0) = x(1)$ and $y(0) = y(1)$ with
+
+$$
+x(t) = \sum_{i=1}^\infty a_i^x \sin{(i\times 2 \pi \times t + \psi_i^x)}\\
+y(t) = \sum_{i=1}^\infty a_i^y \sin{(i\times 2 \pi \times t + \psi_i^y)}.
+$$
+
+
+#### ???? I believe the distribution of $W$ is analytically given in a formula. ????
+
+Assume t is in the uniform distribution $[0,1]$
+
+$$
+t \sim Uniform(0,1)
+$$
+
+The infinitsimal length of the curve at t, 
+$$
+\Delta(t) = \lim_{\delta \to 0} \int_t^{t+\delta} \sqrt{(\frac{dx(t)}{dt})^2+(\frac{dy(t)}{dt})^2} dt,
+$$
+is the weight of proportinal to the probability density of t, when we generate random points on the curve.
+
+Therefore the probability density of t is,
+
+$$
+Pr(z(t)) = \frac{\Delta(t)}{\int_0^{1} \Delta(t) dt}
+$$
+
+Therefore, the probability density of point pair $(z(t_1),z(t_2))$ is,
+
+$$
+Pr((z(t_1),z(t_2))) \sim Pr(z(t_1)) \times Pr(z(t_2))
+$$
+
+This gives the probability density of $W$, where $W(X_i,X_j) = W(z(t_i),z(t_j)) =  (D_e(X_i,X_j),D_g(X_i,X_j))$
+
+Theoretical description will give the relation between "shape" and $W$.
+
+### Application to Data Science
+
+In data science of 2D shapes, we get shapes and we apply the above mentioned theory to the shape data.
+
+Data of shapes are a set of pixels.
+
+The pixels should be converted to discrete broken closed line.
+
+To apply the method to the closed broken line, we can use Fourrier transformation to get coefficients of corresponding trigometric functions.
+
+### Extention to 3D shapes
+
+#### Difficulty in simple extention
+
+As far as I know, the extension of the above mentioned method to 3D shape is not straight-forward.
+
+The Fourrier transformation's extension is the spherization and spherical harmonics decomposition of the functions on the unit sphere can be done as we do.
+
+Unfortunately, the geodesic distance of arbitrary point pairs on 3D shapes is not given from the spherical harmonics decomposition.
+
+Therefore we need to take a different approach.
+
+#### Discretization
+
+2D shapes can be discretized into cyclic graphs.
+
+3D shapes can be discretized into triangular mesh graphs.
+
+We should develop discrete version of distributions $W_{disc}$.
+
+$W_{disc}$ can be obtained by calculating $D_e$ and $D_g$ using random points on the graphs or using vertices when vertices can be considered good representatives of random points.
+
+#### Evaluation of discrete version for 2D shapes
+
+Because we have the analytic method for 2D shape, we can apply the analytic method and discrete method.
+
+We should demonstrate the discrete version distribution, $W_{disc}$, reasonably approximates the analytic method-based $W$.
+
+Also we should demonstrate DEEF's output of a set of $W_{disc}$ is reasonable proxy of DEEF's output of a set of $W$.
+
+## Application of discrete methods to real data sets
+
+After the demonstration of the discrete method's proximity, we evaluate the performance of the discrete version's DEEF-based shape comparison.
+
+The perfomance should be compared with the preceding methods of shape comparison methods.
+
+

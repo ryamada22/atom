@@ -1,0 +1,47 @@
+---
+title: "Rstudio and Rmarkdown"
+author: "ryamada"
+date: "2020/5/29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Rstudio
+
+Rstudio is an application to use R.
+
+RstudioはRを使えるアプリケーションです。
+
+Download it from here : https://rstudio.com/ . Free-version is fine.
+
+ダウンロードしましょう。無償版で良いです。
+
+You can open Rmd format files, that keep regular word-processing type sentences and R codes and figures (and math-formulae).
+
+いわゆる文章と、Rのコードと、その図、（数式も）を書いて保存することができます。
+
+There are different applications that keep documents with R codes. You can use any one of them.
+
+他にもRコード付きのドキュメント作成をするアプリケーションはあります。何を使っても良いです。
+
+If you are not sure about those applications, stick to Rstudio in this course work.
+
+特に好みがなければ、このコースワークではRstudioを使いましょう。
+
+## Open Rmd file with Rstudio
+
+You can get Rmd file of this document "RstudioAndRmd.Rmd" at "Resources/June_Yamada_Room". 
+
+https://panda.ecs.kyoto-u.ac.jp/portal/site/2020-206-P031-000?panel=Main
+
+Get it and open it with Rstudio.
+
+この資料のRmdファイルが"RstudioAndRmd.Rmd" として "Resources/June_Yamada_Room"にあります。
+
+https://panda.ecs.kyoto-u.ac.jp/portal/site/2020-206-P031-000?panel=Main
+
+取ってきて、Rstudioで開いてみましょう。
+

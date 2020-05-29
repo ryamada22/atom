@@ -1,0 +1,91 @@
+---
+title: "Jordan Curve"
+author: "ryamada"
+date: "2020/5/29"
+output: html_document
+---
+
+## Jordan Curve
+
+Jordan curves are the simple closed curves , or closed curves without self-crossings, in 2D plane.
+
+## Generation of Closed Curve
+
+A closed curve is represented as a complex function as below.
+
+Real part and imaginary part are both consisted of trigonometric functions.
+
+In other words, any closed curves can be represented by two Fourrier series.
+
+$$
+z(t) = x(t) + i \times y(t), \; t \in [0,1)
+$$
+
+
+```{r}
+freq.re <- 1:4
+freq.im <- 1:4
+a.re <- rnorm(length(freq.re))
+a.im <- rnorm(length(freq.im)) 
+ph.re <- rnorm(length(freq.re)) 
+ph.im <- rnorm(length(freq.im)) 
+
+t <- seq(from=0, to=1,length=201) * 2 * pi
+t <- t[-1]
+
+x <- y <- rep(0,length(t))
+
+for(i in 1:length(freq.re)){
+  x <- x + a.re[i] * sin(freq.re[i] * t + ph.re[i])
+}
+for(i in 1:length(freq.im)){
+  y <- y + a.im[i] * sin(freq.im[i] * t + ph.im[i])
+}
+
+plot(x,y,type="l")
+```
+
+## Two points on the curve and their arc distance (geodesic distance) and euclidean distanfce in 2D plane
+
+```{r}
+diff.x <- diff(x[c(1:length(x),1)])
+diff.y <- diff(y[c(1:length(y),1)])
+
+len.segments <- sqrt(diff.x^2+diff.y^2)
+
+```
+
+```{r}
+total.len <- sum(len.segments)
+D.geod <- matrix(0,length(t),length(t))
+for(i in 1:(length(t)-1)){
+  for(j in (i+1):length(t)){
+    tmp <- sum(len.segments[i:j])
+    # There are two paths
+    # i -> i+1 -> ... -> j-1 -> j : tmp
+    # i -> i-1 -> ... -> j+1 -> j : total.len -tmp
+    # shorter length of these two is the geodesic dist
+    D.geod[i,j] <- D.geod[j,i] <- min(tmp,total.len-tmp)
+  }
+}
+```
+
+```{r}
+D.Euc <- matrix(0,length(t),length(t))
+for(i in 1:(length(t)-1)){
+  for(j in (i+1):length(t)){
+    tmp <- sum(len.segments[i:j])
+    D.Euc[i,j] <- D.Euc[j,i] <- sqrt((x[i]-x[j])^2+(y[i]-y[j])^2)
+  }
+}
+```
+```{r}
+par(mfcol=c(1,2)) 
+image(D.Euc)
+image(D.geod)
+par(mfcol=c(1,1))
+```
+
+```{r}
+plot(c(D.Euc),c(D.geod),pch=20,cex=0.1)
+```
