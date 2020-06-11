@@ -1,0 +1,623 @@
+---
+title: "四元数による回転繰り返し閉路"
+author: "ryamada"
+date: "2020/6/7"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## ３次元空間の回転と四元数
+
+単位四元数$q = \cos{\theta/2} \times \mathbf{1} + \sin{\theta/2} \times (x \mathbf{i} + y \mathbf{j} + z \mathbf{k});x^2+y^2+z^2=1$ を用いると、
+３次元空間のベクトル$v=(v_x,v_y,v_z)$を軸$(x,y,z)$の周りに角$\theta$で回転してできるベクトル$v'=(v_x',v_y',v_z')$は
+
+$$
+v_x' \mathbf{i} + v_y' \mathbf{j} + v_z' \mathbf{k} = q \times (v_x \mathbf{i} + v_y \mathbf{j} + v_z \mathbf{k}) \bar{q}
+$$
+ただし、$\bar{q}=conj(q) = \cos{\theta/2} \times \mathbf{1} - \sin{\theta/2} \times (x \mathbf{i} + y \mathbf{j} + z \mathbf{k})$
+
+で得られる。
+
+```{r}
+library(onion)
+```
+```{r}
+theta <- pi/3
+xyz <- c(1,0,0)
+v <- c(0,1,0)
+
+q <- cos(theta/2) + sin(theta/2)*(xyz[1]*Hi + xyz[2]*Hj + xyz[3]*Hk)
+v.q <- v[1]*Hi + v[2]*Hj + v[3]*Hk
+v. <- q * v.q * Conj(q)
+v.
+Mod(v.)
+acos(sum(v*c(i(v.),j(v.),k(v.))))/pi # 内積を計算して、角度を求める、1/3 pi である
+```
+
+## 回転四元数に対応する回転行列
+
+```{r}
+library(onion)
+tmp <- rnorm(4)
+tmp <- tmp/sqrt(sum(tmp^2))
+q <- tmp[1] + tmp[2]*Hi + tmp[3] * Hj + tmp[4] * Hk
+
+v <- rnorm(3)
+v.q <- v[1]*Hi + v[2] * Hj + v[3] * Hk
+
+v. <- q * v.q * Conj(q)
+
+
+
+A <- Re(q)
+B <- i(q)
+C <- j(q)
+D <- k(q)
+R <- matrix(c(A^2+B^2-C^2-D^2,2*(-A*D+B*C),2*(A*C+B*D),2*(A*D+B*C),A^2-B^2+C^2-D^2,2*(-A*B+C*D),2*(-A*C+B*D),2*(A*B+C*D),A^2-B^2-C^2+D^2),byrow=TRUE,3,3)
+
+R
+
+R %*% matrix(v,ncol=1)
+v.
+```
+
+```{r}
+my.rot.mat <- function(V,theta){
+  V <- V/sqrt(sum(V^2))
+  A <- cos(theta/2) 
+  B <- sin(theta/2) * V[1]
+  C <- sin(theta/2) * V[2]
+  D <- sin(theta/2) * V[3]
+  R <- matrix(c(A^2+B^2-C^2-D^2,2*(-A*D+B*C),2*(A*C+B*D),2*(A*D+B*C),A^2-B^2+C^2-D^2,2*(-A*B+C*D),2*(-A*C+B*D),2*(A*B+C*D),A^2-B^2-C^2+D^2),byrow=TRUE,3,3)
+  return(R) 
+}
+my.function.tri.rot <- function(A,N,theta,zigzag=FALSE){ 
+  psi <- pi/3
+  if(zigzag){
+    psi <- - pi / 3
+  }
+  R <- my.rot.mat(A,theta)
+  N.new <- R %*% matrix(N,ncol=1)
+  #R2 <- my.rot.mat(N.new,pi/3)
+  R2 <- my.rot.mat(N.new,psi)
+  A.new <- R2 %*% matrix(A,ncol=1) 
+  return(list(N=N.new,A=A.new)) 
+}
+
+my.function.tri.rot.series <- function(A=c(1,0,0),N=c(0,0,1),thetas,zigzag=FALSE){
+  As <- Ns <- matrix(0,length(thetas)+1,length(A))
+  As[1,] <- A
+  Ns[1,] <- N
+  for(i in 1:length(thetas)){
+    if(i %% 2 == 0){
+      tmp <- my.function.tri.rot(As[i,],Ns[i,],thetas[i],zigzag=FALSE)
+    }else{
+      tmp <- my.function.tri.rot(As[i,],Ns[i,],thetas[i],zigzag=zigzag)
+    }
+    
+
+    
+    As[i+1,] <- tmp$A
+    Ns[i+1,] <- tmp$N
+  }
+  return(list(As=As,Ns=Ns,k=length(thetas)))
+}
+```
+
+## 6個の正三角形を平面に並べて正六角形を作る
+
+```{r}
+A1 <- c(1,0,0)
+N1 <- c(0,0,1)
+
+k <- 6
+thetas <- rep(0,k) # 回転角は0ばかり
+
+ANs <- list()
+ANs[[1]] <- list(A=A1,N=N1)
+for(i in 1:k){
+  tmp <- my.function.tri.rot(ANs[[i]]$A,ANs[[i]]$N,thetas[i])
+  ANs[[i+1]] <- list(A=tmp$A,N=tmp$N)
+}
+# 確かに、辺ベクトル、法線ベクトルとが元に戻っている
+ANs[[1]][[1]] - ANs[[k+1]][[1]]
+ANs[[1]][[2]] - ANs[[k+1]][[2]] 
+```
+
+## 対称性のある並べ方
+
+### 2個、3個、…、6個までは、ある同一角で連結して閉じさせることができる
+
+その角が幾つなのか、計算機的に算出してみる。
+
+角度を細かく変化させ、一周してきて、辺ベクトルと法線ベクトルとが一致する角度(の０より大きい)最小値を探索する。
+
+まずは、2個。
+
+これは、2つの正三角形の表裏貼り合わせ。
+「正解」は$\pi$。
+
+最初の辺と周回してきた辺との内積が1で、最初の法線ベクトルと周回してきた法線ベクトルとの内積が1であるような、角度が、閉じさせる角度。
+
+3個は正四面体、４個はピラミッド、５個は正二十面体の１頂点を巡る５面、そして６個は平面。
+
+７個以上になると、ある等角度で接続していくと「余って」しまうので、以下の例では、２周して閉じる場合が算出されている。
+
+グラフ表示は、面の数ごとに２つ描いている。
+
+左側のパネルは、横軸に回転角（単位$\pi$)で、１周して戻ってきた、辺ベクトルと最初の辺ベクトルとの内積、最初と１周後の法線ベクトルの内積とを縦軸に取っている。
+
+両方が揃って、内積１になる角度が、うまく閉じた場合に相当する。
+
+うまく閉じる角度のうち、最小のものが、求める角度。
+
+右側のパネルは、辺ベクトル内積と法線ベクトル内積との２次元変化の様子を表す。点(1,1)に到達すれば、それは、うまく閉じることを意味する。
+
+正三角形の個数が増えると、うまく閉じる角度が複数通り現れる様子が、点(1,1)に繰り返し曲線が戻ることから読み取れる。
+
+
+```{r}
+my.tri.cycle <- function(k, s=3,numtheta = 1003,max.theta = 2 * pi * 1,sign.alt=FALSE){
+  theta.list <- seq(from=0,to=max.theta,length=numtheta)
+  
+  cosAs <- cosNs <- rep(0,length(theta.list))
+  cosANs.sq <- cosAs
+  for(ii in 1:length(theta.list)){
+    thetas <- rep(theta.list[ii],k)
+    if(sign.alt){
+      thetas <- thetas * (-1)^(1:length(thetas)) * (-1)
+    }
+    ANs <- list()
+    ANs[[1]] <- list(A=A1,N=N1)
+    for(i in 1:k){
+      tmp <- my.function.tri.rot(ANs[[i]]$A,ANs[[i]]$N,thetas[i])
+      ANs[[i+1]] <- list(A=tmp$A,N=tmp$N)
+    }
+    cosAs[ii] <- sum(ANs[[1]][[1]] * ANs[[k+1]][[1]])
+    cosNs[ii] <- sum(ANs[[1]][[2]] * ANs[[k+1]][[2]]) 
+  
+  }
+  
+  #theta.list[which((abs(cosAs-1) + abs(cosNs-1) < 10^(-4)) & ((abs(cosAs-1) + abs(cosNs-1) == min(abs(cosAs-1) + abs(cosNs-1)))))]
+  cosANs <- cbind(cosAs,cosNs)
+  cosANs.sum <- apply(cosANs,1,sum)
+  best.theta <- theta.list[which(cosANs.sum > 2-10^(-s))][1]
+  
+  
+  par(mfcol=c(1,2)) 
+  matplot(theta.list/pi,cbind(cosAs,cosNs),type="l",xlab="angle(unit=pi)",ylab="cosines of edge vectors and normal vectors",main = paste("k=",k))
+  abline(h=1,col=3)
+  abline(v=best.theta/pi,col=3)
+  plot(cosAs,cosNs,type="l",xlab="cos(edge_vecs)",ylab="cos(norm_vecs)")
+  points(c(1,1),pch=20,cex=3,col=2)
+  par(mfcol=c(1,1))  
+  return(list(theta=best.theta,cosAs=cosAs,cosNs=cosNs,theta.list=theta.list,sign.alt=sign.alt))
+}
+```
+```{r}
+ks <- 2:30
+outs <- list()
+for(i in 1:length(ks)){
+  outs[[i]] <- my.tri.cycle(k=ks[i])
+}
+
+```
+
+三角形の枚数と均等角との関係は次のようになる。
+
+```{r}
+estimated.theta <- sapply(outs, function(x){return(x$theta)})/pi
+plot(ks,estimated.theta,ylab="angle, unit=PI")
+#abline(h=c(1,1/2,1/3,1/4))
+```
+
+
+
+## 三角形の枚数と周回均等角の関係
+
+正三角形の枚数が２、４、８枚の場合を重ねてプロットするとわかるように、枚数の約数の「周回角度」が含まれる。
+
+```{r}
+matplot(cbind(outs[[1]]$cosAs,outs[[3]]$cosAs,outs[[7]]$cosAs),type="l") 
+```
+
+２枚、３枚、６枚では？
+
+```{r}
+matplot(cbind(outs[[1]]$cosAs,outs[[2]]$cosAs,outs[[5]]$cosAs),type="l") 
+```
+５枚、６枚、１０枚、３０枚では？
+
+```{r}
+matplot(cbind(outs[[4]]$cosAs,outs[[5]]$cosAs,outs[[9]]$cosAs,outs[[29]]$cosAs),type="l") 
+```
+
+この「角度」と枚数とその約数との関係に、ある種の分子分母関係があることがわかる。
+
+## 7枚以上の三角形で閉じる
+
+上の例では、７枚以上においても、均等角を算出した。
+
+しかしながら、この角では、三角形同士が交叉することとなり、３次元空間の閉多面体としては不適当である。
+
+したがって、７枚以上の場合には、等角度ではあるが、角度の正負が交互になるような均質性を仮定して、閉じさせることを考える。
+
+実際に、実施してみると、奇数枚の場合には、正負が反転しない場合が発生し、そのような閉じ方が成立しないことがわかる。
+
+```{r}
+ks2 <- 7:30
+outs.alt <- list()
+for(i in 1:length(ks2)){
+  outs.alt[[i]] <- my.tri.cycle(k=ks2[i],sign.alt=TRUE) # sign.alt=TRUEにより、角の正負を交互にする
+}
+```
+
+算出された角を、上段に偶数枚の場合、下段に奇数枚の場合を書くと、偶数枚の場合には値がありるが、奇数枚の場合には、値が得られないことがわかる。
+
+```{r}
+outs.alt.ang <- sapply(outs.alt,function(x){return(x$theta)})
+matrix(outs.alt.ang,nrow=2)
+plot(matrix(ks2,nrow=2)[2,],matrix(outs.alt.ang,nrow=2)[2,])
+```
+
+角度の符号反転の場合には、枚数の約数関係に、反転無しの場合のような規則は存在しないようである。
+
+以下に、８枚、１６枚の関係を示す。
+
+
+```{r}
+matplot(cbind(outs.alt[[2]]$cosAs,outs.alt[[10]]$cosAs),type="l") 
+```
+
+## 幾何学的に角を求める
+
+正三角形を１点を中心にk枚貼り合わせて、元に戻るようにする。
+
+ただし、k = 6t + s の時には、s = 0 ならば、$2 \times t \times \pi$の角をk等分することとし、s = 1,2,...,5ならば、$2 \times (t+1) \times \pi$ の角をk等分することとする。 
+
+計算してみる。
+
+* $2 t \pi$をk等分して閉じるとき、連結する三角形のなす角$\theta$は
+
+$$
+\phi = \frac{2 t \pi}{k}\\ 
+L = \frac{1}{2 \sin{\frac{\phi}{2}}\\
+\cos{\theta} = \frac{4}{3} * (\frac{1}{2 L^2} - \frac{5}{4})
+$$
+
+関数にする。
+
+
+```{r}
+# k は三角形の枚数
+my.tri.angle <- function(k){
+  # k = t * 6 の時は、角度0
+  # k = t * 6 + s (s<6) の時は、2 pi * (t+1) の角をk等分する
+  six.info <- (k-1)%/%6
+  # six.info + 1 周させる
+  # １つの三角形が稼ぐべき、二次元平面的な角度
+  phi <- 2 * pi * (six.info + 1) / k
+  # 中心頂点から見下ろした時に、正三角形の周辺頂点の原点からの距離（2D平面上の距離）
+  L <- 1/(2*sin(phi/2))
+  # 幾何的な関係を色々やると、正三角形の周辺頂点を一つ飛ばしにした２頂点と
+  # その間にある周辺頂点と中心頂点の中点とをそれぞれ結び、その２つの線分ベクトルのcos(theta)を計算すると以下の式となる
+  costheta <- 4/3 * (1/(2*L^2) - 5/4)
+  # 計算誤差のためにちょっと工夫をして
+  if(costheta > 1) costheta <- 1
+  if(costheta < -1) costheta <- -1
+  theta <- acos(costheta)
+  # 最終的に、２つの三角形のなす角を、pi-thetaとして返す
+  return(pi - theta)
+}
+```
+
+多数の角を評価して推定した結果と一致することを確かめる。
+```{r}
+# ks <- 2:30
+t <- rep(0,length(ks))
+for(i in 1:length(ks)){
+  t[i] <- my.tri.angle(ks[i])
+}
+plot(t)
+```
+```{r}
+plot(estimated.theta, t/pi)
+abline(0,1,col=2)
+```
+
+## 偶数個のk > 6について、角度を正負交互にして１周する場合の幾何的な解
+
+$k = 2p$枚の正三角形を用いる。
+
+外周頂点のz座標は絶対値は等しく、正負が交互になるから、ある２枚の正三角形は、原点(0,0,0)を中心として、
+
+(x,-y,-z), (x',0,z),(x,y,-z)の３点となる。
+
+こららが満足する条件は
+$$
+x^2 + y^2 + z^2 = x^2 + (-y)^2 + (-z)^2 = x^2 + y^2 + (-z)^2 = 1\\
+x'^2 + z^2 = 1\\
+(x-x')^2 + (-y)^2 + (2z)^2 = 1\\
+$$
+また、外周辺の中点のz座標は0であり、隣り合う、中心と外周辺中点を結ぶベクトルとのなす角は、$\frac{2\pi}{k}$である。
+
+中点２つは$(\frac{x+x'}{2},-\frac{y}{2},0),(\frac{x+x'}{2},\frac{y}{2},0)$であるから
+$$
+\frac{(\frac{x+x'}{2})^2 - (\frac{y}{2})^2}{(\frac{x+x'}{2})^2 + (\frac{y}{2})^2} = \cos{\frac{2\pi}{k}}
+$$
+これらを解くと
+$$
+x' = \sqrt{\frac{3}{2}\frac{1}{1+\cos{\frac{2\pi}{k}}}}\\
+z = \sqrt{1-x'^2}\\
+x = x' \cos{\frac{2\pi}{k}}\\
+y = x' \sqrt{(1+\cos{\frac{2\pi}{k}})(1-\cos{\frac{2\pi}{k}})}
+$$
+２枚の三角形がなす角$\theta$は
+(x-x'/2,-y,-3/2z) と(x-x'/2,y,-3/2z)とがなす角の外角であるから、
+
+$$
+\cos{(\pi-\theta)} = \frac{(x-\frac{x'}{2})^2-y^2+9/4z^2}{(x-\frac{x'}{2})^2+y^2+9/4z^2}
+$$
+
+これを関数にして
+
+```{r}
+my.updown.ang <- function(k){
+  C <- cos(2*pi/k)
+  x. <- sqrt(3/(2 * (1+C)))
+  z <- sqrt(1-x.^2)
+  x <- x. * C
+  y <- x. * sqrt((1+C)*(1-C))
+  tmp.cos <- ((x-x./2)^2 - y^2 + 9/4*z^2)/((x-x./2)^2 + y^2 + 9/4*z^2)
+  theta <- pi - acos(tmp.cos)
+  return(theta) 
+}
+```
+
+```{r}
+out.alt.2 <- rep(0,length(ks2))
+for(i in 1:length(ks2)){
+  out.alt.2[i] <- my.updown.ang(ks2[i])
+}
+
+plot(ks2,out.alt.2)
+```
+
+角度をパラメタ化して探索した場合は、２周以上しても良いので、なるべく小さい角で元に戻る値を求めているため、幾何的算出結果と合致しない。
+
+
+```{r}
+outs.alt.ang
+out.alt.2
+```
+枚数が偶数の場合について、悉皆探索最小角と、幾何的産出角の関係を示す。
+
+```{r}
+plot(matrix(outs.alt.ang,nrow=2)[2,],matrix(out.alt.2,nrow=2)[2,])
+```
+
+合致関係は、以下のようなグラフとして表示するとわかりやすい。
+
+また、奇数枚の場合がなぜ不適当かも、視覚的に表現されている。
+
+```{r}
+for(i in 1:length(ks2)){
+  tmp <- cbind(outs.alt[[i]]$cosAs,outs.alt[[i]]$cosNs)
+  matplot(outs.alt[[i]]$theta.list/pi,tmp,type="l")
+  abline(v = out.alt.2[i]/pi,col=4)
+}
+```
+
+
+## 必ずしも均等角でないが、閉じるための角度条件
+
+今、k枚の正三角形が、
+$$
+(\theta_1,\theta_2,...,\theta_k)
+$$
+で閉じているとする。
+
+k-1枚目とk枚目との間に２枚を$\pi$でピタリと押しつぶした状態で割り込ませ、k+2枚にすることができる。
+その時にできる、長さk+2の角度列は
+
+$$
+(\theta_1,...,\theta_{k-1},-\pi + \phi, \pi, \theta_k - \phi)
+$$
+
+5枚で均等曲げを実行してみる。
+
+```{r}
+k <- 5
+theta.k <- t[k-1]
+thetas <- rep(theta.k,k)
+
+outk <- my.function.tri.rot.series(thetas=thetas)
+range(outk$As[1,] -outk$As[k+1,])
+range(outk$Ns[1,] -outk$Ns[k+1,])
+```
+
+```{r}
+my.insert.two.tris <- function(theta,phi = 0.1){
+  k <- length(theta)
+  ret <- c(theta[1:(k-1)],-pi + phi,pi,theta[k]-phi)
+  return(ret)
+}
+thetas2 <- my.insert.two.tris(thetas)
+k2 <- length(thetas2)
+outk2 <- my.function.tri.rot.series(thetas=thetas2)
+range(outk2$As[1,] -outk2$As[k2+1,])
+range(outk2$Ns[1,] -outk2$Ns[k2+1,])
+```
+
+２枚貼り合わせ三角形を挿入して角度ベクトルを不均一にした。それを改変して、閉じる・閉じない条件がどうなるか・・・
+
+角度の順序を入れ替えると、閉じなくなる。。。。単純ではない。そりゃそうか。
+
+```{r}
+thetas2.shuffle <- sample(thetas2)
+
+outk3 <- my.function.tri.rot.series(thetas=thetas2.shuffle)
+range(outk3$As[1,] -outk3$As[k2+1,])
+range(outk3$Ns[1,] -outk3$Ns[k2+1,])
+
+```
+
+## ジグザグ路が閉じること
+
+１頂点周りにk枚の正三角形が並んで閉じる例を検討してきた。
+
+今度は、正三角形がジグザグ路・擬直線周回路をなす場合について検討する。
+
+すでに作成した関数の一部改変で可能である。
+
+4枚で一周する時は、正四面体様の形になるので、３枚を１頂点周りにとった場合と同じ角度で閉じることに注意する。
+
+６枚の場合に$\pi$でも辺ベクトルと法線ベクトルとが一致するが、ベクトルの向きとしてそのようになるだけであって、閉じるわけではないことに注意する。
+
+```{r}
+my.tri.zigzag.cycle <- function(k, s=3,numtheta = 1003,max.theta = 2 * pi * 1,sign.alt=FALSE){
+  theta.list <- seq(from=0,to=max.theta,length=numtheta)
+  
+  cosAs <- cosNs <- rep(0,length(theta.list))
+  cosANs.sq <- cosAs
+  for(ii in 1:length(theta.list)){
+    thetas <- rep(theta.list[ii],k)
+    if(sign.alt){
+      thetas <- thetas * (-1)^(1:length(thetas)) * (-1)
+    }
+    ANs <- list()
+    ANs[[1]] <- list(A=A1,N=N1)
+    for(i in 1:k){
+      if(i %% 2 == 0){
+        tmp <- my.function.tri.rot(ANs[[i]]$A,ANs[[i]]$N,thetas[i],zigzag=FALSE)
+      }else{
+        tmp <- my.function.tri.rot(ANs[[i]]$A,ANs[[i]]$N,thetas[i],zigzag=TRUE)
+      }
+      
+      
+      ANs[[i+1]] <- list(A=tmp$A,N=tmp$N)
+    }
+    cosAs[ii] <- sum(ANs[[1]][[1]] * ANs[[k+1]][[1]])
+    cosNs[ii] <- sum(ANs[[1]][[2]] * ANs[[k+1]][[2]]) 
+  
+  }
+  
+  #theta.list[which((abs(cosAs-1) + abs(cosNs-1) < 10^(-4)) & ((abs(cosAs-1) + abs(cosNs-1) == min(abs(cosAs-1) + abs(cosNs-1)))))]
+  cosANs <- cbind(cosAs,cosNs)
+  cosANs.sum <- apply(cosANs,1,sum)
+  best.theta <- theta.list[which(cosANs.sum > 2-10^(-s))][1]
+  
+  
+  par(mfcol=c(1,2)) 
+  matplot(theta.list/pi,cbind(cosAs,cosNs),type="l",xlab="angle(unit=pi)",ylab="cosines of edge vectors and normal vectors",main = paste("k=",k))
+  abline(h=1,col=3)
+  abline(v=best.theta/pi,col=3)
+  plot(cosAs,cosNs,type="l",xlab="cos(edge_vecs)",ylab="cos(norm_vecs)")
+  points(c(1,1),pch=20,cex=3,col=2)
+  par(mfcol=c(1,1))  
+  return(list(theta=best.theta,cosAs=cosAs,cosNs=cosNs,theta.list=theta.list,sign.alt=sign.alt))
+}
+```
+
+```{r}
+ks <- 2:30
+outs.zigzag <- list()
+for(i in 1:length(ks)){
+  outs.zigzag[[i]] <- my.tri.zigzag.cycle(k=ks[i])
+}
+
+```
+
+4枚と6枚と12枚では、12枚の方が４枚の角度で三巡する場合、6枚の角度で二巡する場合があることが、以下のプロットからわかる
+```{r}
+matplot(cbind(outs.zigzag[[3]]$cosAs,outs.zigzag[[5]]$cosAs,outs.zigzag[[11]]$cosAs),type="l") 
+```
+
+## 解析的にジグザグ均等角を算出する
+
+２個の正三角形の頂点座標は次のように表される。
+
+$X = (L\cos{\frac{2\pi}{k}},-L\sin{\frac{2\pi}{k}},0)$,
+$Y = (L\cos{\frac{2\pi}{k}},L\sin{\frac{2\pi}{k}},0)$,
+$Z = (L,0,z)$,
+$W = (L\cos{\frac{4\pi}{k}},L\sin{\frac{4\pi}{k}},z)$
+
+XYZ,YZWが正三角形である。
+
+２枚の正三角形のなす角は、X--(Y,Zの中点)、（Y,Zの中点)--W の２ベクトルのなす角である。
+
+正三角形である条件から、XY,YZ,XZ,YW,ZWの長さが１である。
+したがって
+
+$$
+2L\sin{\frac{2\pi}{k}} = 1\\
+(L\cos{\frac{2\pi}{k}} - L)^2 + (L\sin{\frac{2\pi}{k}})^2 + z^ 2=1
+$$
+
+これを解いて
+$$
+L = \frac{1}{2\sin{\frac{2\pi}{k}}}\\
+z = \sqrt{1-\frac{1-\cos{\frac{2\pi}{k}}}{2\sin{\frac{2\pi}{k}}^2}}
+$$
+関数を作る。
+
+```{r}
+my.zigzag.ang <- function(k){
+  ang <- 2*pi/k
+  L <- 1/(2*sin(ang))
+  z <- sqrt(1-(1-cos(ang))/(2*sin(ang)^2))
+  
+  X <- c(L*cos(ang),-L*sin(ang),0)
+  Y <- c(L*cos(ang),L*sin(ang),0)
+  Z <- c(L,0,z)
+  W <- c(L*cos(ang*2),L*sin(ang*2),z) 
+  
+  YZ <- (Y + Z)/2
+  X.YZ <- X - YZ
+  W.YZ <- W - YZ
+  
+  tmpcos <- sum(X.YZ*W.YZ)/(sqrt(sum(X.YZ^2))*sqrt(sum(W.YZ^2)))
+  
+  theta <- pi - acos(tmpcos)
+  return(theta)
+}
+```
+
+
+計算しておく。
+```{r}
+
+ang.zigzag2 <- rep(0,length(ks))
+for(i in 1:length(ks)){
+  ang.zigzag2[i] <- my.zigzag.ang(ks[i])
+}
+plot(ks,ang.zigzag2)
+```
+
+悉皆探索の結果との一致を確認する。kが偶数の時にきちんと計算が合っていることがわかる
+
+```{r}
+for(i in 1:length(ks)){
+  tmp <- cbind(outs.zigzag[[i]]$cosAs,outs.zigzag[[i]]$cosNs)
+  matplot(outs.zigzag[[i]]$theta.list/pi,tmp,type="l",main=ks[i])
+  abline(v = ang.zigzag2[i]/pi,col=4)
+}
+```
+## まとめ
+
+ひとかたまりの何かを整数で等分したものを、単位分数と呼ぶことにする。
+
+$\frac{1}{k}; k = 1,2,...$ が単位分数。
+
+正三角形を３次元空間に並べることによって、複数の単位分数的角度というものが定まる。
+
+* 1頂点周りにk枚の正三角形を並べ、正三角形のなす角を均一にしたものがその一つ
+* 1頂点周りにk(偶数)枚の正三角形を、上下交互に同じ角度で折ることにしたときに定まる角がその一つ
+* k(偶数)枚の正三角形をジグザグに並べて、１周させるに際して、同じ角度で曲げるときの角がその一つ
+
+このような、複数種類ある正三角形の３次元空間配置に伴う単位分数的角度のみを使って、正三角形メッシュはできているのではないか、という仮説を立てた。
+
+これは正しいか？
