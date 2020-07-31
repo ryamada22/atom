@@ -1,0 +1,29 @@
+---
+title: "H3上の双曲面的四面体"
+author: "ryamada"
+date: "2020/7/22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## ４点を持つ
+
+３点V1,V2,V3をH2平面上に配置し、第４点V4をH2平面から鉛直方向無限遠に取る。
+
+V1 = (x1,y1,0)
+V2 = (x2,y2,0)
+V3 = (x3,y3,0)
+
+V4 = (*,*, ∞)
+
+４点のhorocycleの大きさ、w1,w2,w3,w4を定める。
+
+３点を中心とした、半球の半径を定める。
+
+```{r}
+
+```
+

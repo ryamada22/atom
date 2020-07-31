@@ -1,0 +1,44 @@
+---
+title: "PDFと幾何"
+author: "ryamada"
+date: "2020/7/28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 正規分布
+
+
+```{r}
+x <- seq(from=-2,to=2,length=101)
+pdf <- dnorm(x)
+
+y <- pnorm(x) - 0.5
+
+X <- cbind(x,rep(1,length(x)))
+Y <- cbind(y,rep(0,length(y)))
+plot(rbind(X,Y))
+for(i in 1:length(x)){
+  segments(X[i,1],X[i,2],Y[i,1],Y[i,2])
+}
+plot(sort(y))
+```
+
+```{r}
+n <- 100
+x <- rnorm(n)
+
+y <- pnorm(x) - 0.5
+
+X <- cbind(x,rep(1,length(x)))
+Y <- cbind(y,rep(0,length(y)))
+plot(rbind(X,Y))
+for(i in 1:length(x)){
+  segments(X[i,1],X[i,2],Y[i,1],Y[i,2])
+}
+
+plot(sort(y))
+```

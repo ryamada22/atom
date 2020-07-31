@@ -1,0 +1,179 @@
+---
+title: "グラフの埋め込み"
+author: "ryamada"
+date: "2020/7/31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## エッジ等長グラフと埋め込み
+
+単純なグラフ$G = (V,E)$を考える。ループを持たない、連結無向グラフとする。
+
+$|V|$個の頂点を、$|V|$次元正規直交基底ベクトルに対応づければ、任意のグラフのエッジ長は、$\sqrt{2}$である。
+
+これは、$G$の$|V|$次元空間への、エッジ等長埋め込みの一つである。
+
+## グラフの分離
+
+今、$G$ が、$S \subset V$ により２つの連結成分に分離できるとする。
+
+## グラフの分離と埋め込み座標変換
+
+今、$S \subset V$ によりGが２つの連結成分$G_1,G_2$に分離できるとき、
+$G_1,G_2$について、$S$が張る部分空間は固定し、それ以外の次元空間のみにおいて、それぞれ、独立に回転しても、グラフ距離は変わらない。
+
+### 例
+
+#### $|S| = 1$ の場合
+
+この１点を動かさなければ良いので、この点を原点とした、$|V|$次元回転を$G_1,G_2$に施すことが可能である。
+
+#### $|S| = 2$ の場合
+
+２点を結ぶ直線上の点を原点とし、この直線方向を基底の一つにとった上で、その基底成分以外が張る$|V|-1$次元回転を施すことが可能である。
+
+#### $|S| = k$ の場合
+
+k点が張る部分空間上の１点を原点とし、$|S|-1$次元部分空間を取る。この$|S|-1$次元部分空間を張る基底と、それ以外の$|V| - (|S| -1)$ 次元の回転を施すことができる。
+
+## 実験
+
+```{r}
+library(igraph)
+nv <- 7
+X <- diag(nv)/sqrt(2)
+el <- rbind(c(1,2),c(2,3),c(3,4),c(4,5),c(3,1),c(2,4),c(5,6),c(6,7))
+g <- graph.edgelist(el,directed=FALSE)
+plot(g)
+adj.mat <- get.adjacency(g)
+```
+
+#### １頂点で分離
+
+頂点4によって分離できる。
+
+```{r}
+subV <- c(4)
+g_4 <- delete_vertices(g,subV) 
+cl <- clusters(g_4) # connected components
+cl
+plot(g_4)
+```
+
+```{r}
+library(GPArotation)
+Rn <- Random.Start(nv)
+
+X. <- X - X[,subV]
+
+X.. <- X.
+# 分離した片方の座標だけ回転する
+tmp.X.. <- Rn %*% X.[,which(cl[[1]]==1)]
+
+X..[,which(cl[[1]]==1)] <- tmp.X..
+X... <- X.. + X[,3]
+
+D <- as.matrix(dist(t(X)))
+D... <- as.matrix(dist(t(X...)))
+
+D
+D...
+# 隣接行列をかけることで、隣接頂点間の距離だけを表示させる
+adj.mat * D
+adj.mat * D...
+adj.mat * (D - D...)
+```
+
+#### 2頂点で分離
+
+頂点2,3で分離できる。
+
+複数(N個)の頂点が張る部分空間を固定した回転をさせるためには、
+１つの頂点を原点とし、原点とした頂点から、残りのN-1個の分離頂点へ向かうベクトルが張る空間を、N-1個の直交基底が張るように回転する必要がある。
+
+
+```{r}
+library(svd)
+
+V <- matrix(rnorm(5*5),ncol=5)
+nn <- 3
+out <- svd(V[,1:nn])
+out$u %*% diag(out$d) %*% t(out$v) - V[,1:nn]
+
+t(out$u) %*% out$u # nn次元単位行列
+
+R <- diag(5)
+R[1:nn,] <- t(out$u)
+R %*% t(R)
+
+tmp <- solve(R) %*% V
+D <- diag
+
+```
+
+```{r}
+# n x m 行列V(n > m)に列を増やして、Vを含むn x n 正規直交基底を作る
+my.GS.basis <- function(V){
+  n <- length(V[,1])
+  m <- length(V[1,])
+  ret <- matrix(0,n,n) 
+  ret[,1:m] <- V
+  R <- matrix(rnorm(n*(n-m)),nrow=n)
+  for(i in (m+1):n){
+    ip <- t(ret[,1:(i-1)]) %*% matrix(R[,i-m],ncol=1)
+    ret[,i] <- R[,i-m] - apply(t(ret[,1:(i-1)]) * c(ip),2,sum)
+    ret[,i] <- ret[,i]/sqrt(sum(ret[,i]^2))
+  }
+  return(ret) 
+}
+```
+
+```{r}
+tmpR <- my.GS.basis(out$u) 
+tmpR
+t(tmpR) %*% tmpR
+
+t(tmpR) %*% V
+```
+
+N頂点のうちサブセットSの部分空間を$|S|-1$次元に回転する
+```{r}
+my.subspace.rotation <- function(X,S){
+  n <- length(X[1,])
+  X. <- X - X[,S[1]]
+  svd.out <- svd(X.[,S[-1]])
+  tmpR <- my.GS.basis(svd.out$u)
+  S. <- (1:n)[-(S[-1])]
+  R <- matrix(0,n,n)
+  R[,S[-1]] <- tmpR[,1:length(svd.out$u[1,])] 
+  R[,S.] <- tmpR[,(length(svd.out$u[1,])+1) : n]
+  X.. <- t(R) %*% X.
+  return(list(newX=X..,R=t(R)))
+}
+```
+```{r}
+my.gnode.separation <- function(g,S){
+  nv <- length(V(g))
+  nonS <- (1:nv)[-S] 
+  
+  gsub <- delete_vertices(g,S) 
+  cl <- clusters(gsub) 
+  
+  member1 <- nonS[which(cl[[1]]==1)]
+  member2 <- nonS[which(cl[[1]]==2)]
+  
+  return(list(member1 = member1, member2 = member2, separator=S)) 
+}
+```
+```{r}
+S <- c(2,3)
+X <- diag(7)/sqrt(2) 
+out2 <- my.subspace.rotation(X,S) 
+
+separation.members <- my.gnode.separation(g,S)
+separation.members 
+```
