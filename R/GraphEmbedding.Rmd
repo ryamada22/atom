@@ -64,6 +64,9 @@ cl
 plot(g_4)
 ```
 
+
+
+
 ```{r}
 library(GPArotation)
 Rn <- Random.Start(nv)
@@ -87,15 +90,16 @@ adj.mat * D
 adj.mat * D...
 adj.mat * (D - D...)
 ```
+## 一般的な場合の処理の考え方
 
-#### 2頂点で分離
-
-頂点2,3で分離できる。
-
-複数(N個)の頂点が張る部分空間を固定した回転をさせるためには、
-１つの頂点を原点とし、原点とした頂点から、残りのN-1個の分離頂点へ向かうベクトルが張る空間を、N-1個の直交基底が張るように回転する必要がある。
+グラフGが、頂点サブセットSによって、２つの連結成分$G_1,G_2$に分離できるとき、
+Sが張る空間の１点が原点になるように、グラフを移動し、
+Sが張る空間が、$|S|-1$個の正規直交基底ベクトルで張られるようにグラフを回転し、その上で、$G_1,G_2$の片方を、Sが張っている空間については回転しないような回転で移動することで、$|V|$次元空間の埋め込み状態を変化させることができる。
 
 
+### 頂点サブセットが張る空間を$|S|-1$軸で張るように回転させる
+
+特異値分解との関係
 ```{r}
 library(svd)
 
@@ -114,6 +118,9 @@ tmp <- solve(R) %*% V
 D <- diag
 
 ```
+
+特異値分解を利用して得られた、n x m 行列は、求めたい回転の逆回転の一部に相当する。
+従って、そのn x m 行列を含む n x n 回転行列をグラム-シュミット法で作成する。
 
 ```{r}
 # n x m 行列V(n > m)に列を増やして、Vを含むn x n 正規直交基底を作る
@@ -135,12 +142,16 @@ my.GS.basis <- function(V){
 ```{r}
 tmpR <- my.GS.basis(out$u) 
 tmpR
-t(tmpR) %*% tmpR
+t(tmpR) %*% tmpR # 回転行列
 
-t(tmpR) %*% V
+t(tmpR) %*% V # Vが低次元に納まっていることの確認
 ```
 
 N頂点のうちサブセットSの部分空間を$|S|-1$次元に回転する
+
+N頂点座標行列Xと、頂点サブセットSから、
+原点移動、回転した新座標と回転行列を算出して返す。
+
 ```{r}
 my.subspace.rotation <- function(X,S){
   n <- length(X[1,])
@@ -155,6 +166,9 @@ my.subspace.rotation <- function(X,S){
   return(list(newX=X..,R=t(R)))
 }
 ```
+
+頂点部分集合によって、できる２つの連結成分の頂点IDリストを返す。
+
 ```{r}
 my.gnode.separation <- function(g,S){
   nv <- length(V(g))
@@ -177,3 +191,6 @@ out2 <- my.subspace.rotation(X,S)
 separation.members <- my.gnode.separation(g,S)
 separation.members 
 ```
+
+あとは、この$G_i$の頂点のみを、Sの張る空間以外の空間で回転させれば良い
+
