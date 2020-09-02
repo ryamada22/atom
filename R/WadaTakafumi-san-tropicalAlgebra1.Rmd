@@ -1,0 +1,82 @@
+---
+title: "TropicanSemiRing"
+author: "ryamada"
+date: "2020/9/2"
+output: html_document
+---
+
+## 特種な加法と乗法, t+, t*
+
+t= ? の時、t+ は通常の加算、t* は通常の積算。
+$t \to\infty$ の時、t+ は通常の積算、t* はmaxを取る演算。
+
+それはどんな演算？
+Rで関数にできる？
+
+$$
+t+(a,b) = log_t(t^x+t^y)\\
+t*(a,b) = log_t(t^x*t^y)
+$$
+
+
+```{r setup}
+library(knitr)
+library(rgl)
+knit_hooks$set(rgl = hook_rgl)
+```
+```{r}
+my.t.add <- function(a,b,t){
+  log(t^a+t^b,t)
+}
+my.t.multiplication <- function(a,b,t){
+  log(t^a*t^b,t)
+}
+```
+
+```{r}
+t <- seq(from=0,to=5,length=100) # いろいろなtの値をとる
+t <- t[-1] # t=0を除く
+a <- 2
+b <- 3
+tadd <- tmult <- rep(NA,length(t))
+for(i in 1:length(t)){
+  tadd[i] <- my.t.add(a,b,t[i])
+  tmult[i] <- my.t.multiplication(a,b,t[i]) 
+}
+plot(t,tadd,ylim=c(-10,10))
+abline(h=max(a,b))
+plot(t,tmult,ylim=c(-10,10))
+abline(h=a+b)
+```
+
+```{r}
+# (a,b)平面のグリッド座標をつくる
+a <- b <- seq(from=-3,to=3,length=51)
+ab.grid <- expand.grid(a,b)
+plot(ab.grid)
+```
+
+```{r}
+plot(t)
+```
+
+各tの値について、曲面の第３次元値を計算する
+```{r}
+z.add <-list()
+z.mult <- list()
+
+for(i in 1:length(t)){
+  this.t <- t[i]
+  z.add[[i]] <- rep(NA, length(ab.grid[,1]))
+  z.mult[[i]] <- rep(NA,length(ab.grid[,1]))
+  for(j in 1:length(ab.grid[,1])){
+    z.add[[i]][j] <- my.t.add(ab.grid[j,1],ab.grid[j,2],this.t) 
+    z.mult[[i]][j] <- my.t.multiplication(ab.grid[j,1],ab.grid[j,2],this.t) 
+  }
+}
+```
+
+```{r, rgl=TRUE}
+plot3d(ab.grid[,1],ab.grid[,2],z.add[[5]])
+
+```

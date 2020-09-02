@@ -1,0 +1,67 @@
+---
+title: "Tropical Algebra and Sparcity"
+author: "ryamada"
+date: "2020/9/2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Tropical 代数
+Tropical代数は、半環
+$$
+(\mathbf{R} \cup \infty,\oplus,\otimes)
+$$
+
+## Tropical 演算
+$$
+x \oplus y = min(x,y), \text{or } max(x,y)\\
+x \otimes y = x + y
+$$
+
+```{r}
+library(tropicalSparse)
+x <- 3
+y <- 7
+tropicalsparse.add(x,y,algebraType="minplus")
+tropicalsparse.add(x,y,algebraType="maxplus")
+tropicalsparse.mul(x,y,algebraType="minplus")
+tropicalsparse.mul(x,y,algebraType="maxplus")
+```
+無限大も集合に含まれるが、$x \oplus y = min(x,y)$の時に計算ができるようだ。
+
+無限大は加算の、0は乗算のneutral elementとされている
+```{r}
+z <- Inf
+tropicalsparse.add(x,z,algebraType="minplus")
+# tropicalsparse.add(x,z,algebraType="maxplus") # errorになる
+tropicalsparse.mul(x,z,algebraType="minplus")
+# tropicalsparse.mul(x,z,algebraType="maxplus") # errorになる
+z <- 0
+tropicalsparse.add(x,z,algebraType="minplus")
+tropicalsparse.add(x,z,algebraType="maxplus") # errorになる
+tropicalsparse.mul(x,z,algebraType="minplus")
+tropicalsparse.mul(x,z,algebraType="maxplus") # errorになる
+```
+
+$$
+(x \oplus y)^3 = x^3 \oplus x^2y \oplus xy^2 \oplus y^3 \\
+(x \oplus y)^3 = x^3 \oplus y^3
+$$
+```{r}
+xplusy <- tropicalsparse.add(x,y,algebraType="minplus")
+xplusy.times.xplusy <- tropicalsparse.mul(xplusy,xplusy,algebraType="minplus")
+xplusy.to.3 <- tropicalsparse.mul(xplusy,xplusy.times.xplusy,algebraType="minplus")
+x
+y
+xplusy
+xplusy.times.xplusy
+xplusy.to.3
+xplusy^3
+tropical
+tropicalsparse.add(x^3,y^3,algebraType="minplus")
+```
+
+
