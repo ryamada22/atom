@@ -1,0 +1,112 @@
+---
+title: "ホロサイクルを使って双曲上半平面測地距離の有限値を計算する"
+author: "ryamada"
+date: "2020年10月19日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 上半平面モデルでの２点間の距離
+
+２点$(x_1,x_2)$,$(y_1,y_2)$間の距離は以下の式で与えられる。
+
+
+$$
+dist((x_1,x_2),(y_1,y_2)) = arcosh(1 + \frac{(y_1-x_1)^2+(y_2-x_2)^2}{2x_2 y_2})
+$$
+
+```{r}
+my.hyperbol.geod <- function(x,y){
+  acosh(1 + ((y[1]-x[1])^2+(y[2]-x[2])^2)/(2*x[2]*y[2]))
+}
+```
+
+## ホロサイクル
+
+実軸上の点から等距離の点の集合がホロサイクル。上半平面では、実軸上の点に接する円となる。
+
+```{r}
+my.horocycle <- function(a,r=1,n=100){
+  t <- seq(from=0,to=1,length=n+1)*2*pi
+  t <- t[-1]
+  ret <- cbind(r*cos(t)+a,r*sin(t)+r)
+  return(ret)
+}
+a <- 2
+r <- 3
+h <- my.horocycle(a,r)
+plot(h,asp=TRUE)
+```
+
+## 測地線とホロサイクルの交点
+
+実軸上の２点(a1,0),(a2,0)の測地線は((a1+a2)/2=a3,0)を中心とする半径R=|a1-a2|/2の半円弧。
+
+この測地線と、(a1,0)からの半径rのホロサイクル((a1,r)を中心とする半径rの円)とは、っ直交することが知られているから、
+
+```{r}
+my.arc.horo.cross <- function(a1,a2,r){
+  R <- abs(a1-a2)/2
+  theta <- atan(r/R)
+  if((a1+a2)/2 > a1){
+    x <- (a1+a2)/2 - R * cos(2*theta)
+  }else{
+    x <- (a1+a2)/2 + R * cos(2*theta)
+  }
+  
+  y <- R * sin(2*theta)
+  ret <- c(x,y)
+  return(ret)
+}
+my.circle <- function(x,R,n=100){
+  t <- seq(from=0,to=1,length=n+1)*2*pi
+  t <- t[-1]
+  ret <- cbind(R*cos(t)+mean(x),R*sin(t))
+  return(ret)
+}
+```
+
+```{r}
+a1 <- 2
+a2 <- 6
+r <- 1
+h1 <- my.horocycle(a1,r)
+h2 <- my.horocycle(a2,r)
+geod <- my.circle((a1+a2)/2,abs(a1-a2)/2)
+plot(rbind(h1,h2,geod),asp=TRUE,pch=20,cex=0.1)
+abline(h=0)
+A1 <- my.arc.horo.cross(a1,a2,r)
+points(A1[1],A1[2],pch=20,col=2,cex=2)
+A2 <- my.arc.horo.cross(a2,a1,r)
+points(A2[1],A2[2],pch=20,col=3,cex=2)
+
+# ２点間距離
+my.hyperbol.geod(A1,A2)
+
+```
+```{r}
+a1 <- 2
+a2 <- 7
+r <- 1
+h1 <- my.horocycle(a1,r)
+h2 <- my.horocycle(a2,r)
+geod <- my.circle((a1+a2)/2,abs(a1-a2)/2)
+plot(rbind(h1,h2,geod),asp=TRUE,pch=20,cex=0.1)
+abline(h=0)
+A1 <- my.arc.horo.cross(a1,a2,r)
+points(A1[1],A1[2],pch=20,col=2,cex=2)
+A2 <- my.arc.horo.cross(a2,a1,r)
+points(A2[1],A2[2],pch=20,col=3,cex=2)
+
+# ２点間距離
+my.hyperbol.geod(A1,A2)
+
+```
+
+この値$L$を$exp(L)$とすると、Pennerのλ距離になる。ただし、二つのホロサイクルが交叉するときの$L$は負数とする。
+
+
+

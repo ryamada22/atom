@@ -1,0 +1,130 @@
+---
+title: "DEEFの双曲幾何的座標"
+author: "ryamada"
+date: "2020年10月18日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 双曲幾何空間は「半平面モデル」などで「ちゃんと」納められる
+
+双曲幾何では、内積を決める行列(計量) $M$をうまく標準化したとして、その対角成分が$(1,1,...,1,-1)$となったようなもの(を含む)。
+そのような$M$を用いて、内積が
+$$
+x^T M y,\\
+$$
+
+と計算されるとき、その空間は双曲幾何空間であるという。
+
+## DEEFの内積規定行列
+
+DEEFの計量が
+
+$$
+M = \begin{pmatrix}a_1&0&0\\0&a_2&0\\0&0&-a_3 \end{pmatrix}; a_i \ge 0
+$$
+
+であるとき、DEEF空間での関数内積は
+
+$$
+x^T R M_{st} R y,\\
+R = \text{diag}(\sqrt{a_1},\sqrt{a_2},\sqrt{a_3}),\\
+M' = M = \begin{pmatrix}1&0&0\\0&1&0\\0&0&-1 \end{pmatrix}
+$$
+
+と表される。
+
+以下では、$M'$をこのような標準化された行列であるものとして扱うこととする。
+
+## 半平面モデル
+
+(x,y,z)の３座標に対して$M' = M = \begin{pmatrix}1&0&0\\0&1&0\\0&0&-1 \end{pmatrix}$
+が定まっているものとする。
+
+このとき、点(x,y,z)における「微小長さds」が、以下のように定まるような３次元空間(ただしz>0)を考える。
+
+
+$$
+(ds)^2 = \frac{(dx)^2+(dy)^2+(dz)^2}{z^2}
+$$
+
+
+この半３次元空間は、$M'$が計量を定める空間である双曲幾何空間のモデルになっている、というのが半平面モデル(の３次元版)である。
+
+この式が意味するところは
+
+* zが0に近いときには、(x,y,z)の変化量が小さくても、長い距離であるとみなし、zが大きくなると、(x,y,z)の変化量が大きくても、短めの距離になることを意味する。
+
+このような半平面モデルでは、z=0の平面上の点はすべて「無限遠点」に相当する
+
+また、z=0平面上の２点を結ぶ直線は、その２点を直径とする半円弧になることも知られている。
+
+
+## Rで実験
+
+DEEFに限らないでやってみる。
+
+２次元ユークリッド空間上の点について、ユークリッド空間的に内積行列を作成し、その対数を取り、そこから、deef座標を作成してみる。
+
+これは、関数の集合から内積行列を作成し、その対数を取り、負の固有値が必ず現れるようにして、その固有値分解による座標作成をすることに相当する。
+
+ただし、自身の内積は1、非自身との内積は0-1の範囲に収まるようにする。
+
+```{r}
+devtools::install_github("DaigoOkada/deef")
+```
+
+```{r}
+x <- y <- z <- seq(from=0,to=1,length=20) # 内積を0-1にするべく、正関数とする
+x <- x[-1]
+y <- y[-1]
+z <- z[-1]
+xy <- as.matrix(expand.grid(x,y))
+xy <- xy / sqrt(apply(xy^2,1,sum)) # 自身内積を1にする
+#xy 
+plot(xy)
+```
+
+```{r}
+IP.mat <- xy %*% t(xy)
+#IP.mat2 <- matrix(0,length(IP.mat[,1])+1,length(IP.mat[,1])+1)
+#IP.mat2[1:length(IP.mat[,1]),1:length(IP.mat[,1])] <- IP.mat
+range(IP.mat)
+```
+```{r}
+image(IP.mat)
+```
+
+```{r}
+H <- log(IP.mat)
+range(H)
+```
+```{r}
+image(H)
+```
+```{r}
+eigen.out <- eigen(H)
+```
+```{r}
+plot(eigen.out[[1]])
+```
+```{r}
+k <- length(H[,1])
+plot(eigen.out[[2]][,c(1,k)],ylim=c(min(eigen.out[[2]][,k]),0))
+t <- seq(from=0,to=1,length=100) * 2 * pi
+r <-0.05
+points(r * sin(t), r * (-1-cos(t)),type="l",col=2)
+r <-0.05
+points(r * sin(t)+0.05, r * (-1-cos(t)),type="l",col=2)
+r <-0.05
+points(r * sin(t)-0.05, r * (-1-cos(t)),type="l",col=2)
+r <-0.025
+points(r * sin(t), r * (-1-cos(t)),type="l",col=2)
+r <-sqrt(2) * 0.07/2
+points(r * sin(t)-0.12, r * (-1-cos(t)),type="l",col=2)
+```
+
+
