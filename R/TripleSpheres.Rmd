@@ -1,0 +1,252 @@
+---
+title: "互いに接する３つの球"
+author: "ryamada"
+date: "2020年11月10日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rgl)
+knitr::knit_hooks$set(webgl = hook_webgl)
+```
+
+## xy平面上に３つの球。互いに接しているとする。
+
+まず、上半空間モデルにおける、３つのホロサイクル(球)について検討することにする
+
+第１の球の中心座標を$(0,0,r_1)$、第２の球のそれを$(x_2,0,r_2)$、第３の球のそれを$(x_3,y_3,r_3)$としても一般性を失わず、接する条件を検討することができる。
+
+第１の球と第２の球の接する条件は、
+
+$(0,0,r_1),(x_2,0,r_2),(x_2,0,r_2-r_1)$が直角三角形である条件から
+
+$$
+(r_1+r_2)^2 = (r_2-r_1)^2 + x^2
+$$
+
+これを解いて
+$$
+x_2 = 2\sqrt{r_1r_2}
+$$
+
+第１・第３の球の関係、第２・第３の球の関係から
+$$
+x_3^2 + y_3^2 = (2\sqrt{r_1r_3})^2\\
+(x_3-x_2)^2 + y_3^2 = (2\sqrt{r_2r_3})^2
+$$
+
+ここで、第１式の条件から
+$$
+x_3 = 2\sqrt{r_1r_3}\cos{\theta}\\
+y_3 = 2\sqrt{r_1r_3}\sin{\theta}
+$$
+と$\theta$でパラメタ表現する。
+
+これを用いて第２式を満たす$\theta$を導くと
+
+$$
+\cos{\theta} = /frac{r_1r_2+r_1r_3-r_2r_3}{2r_1\sqrt{r_2r_3}}
+$$
+が得られる。
+
+## Rでやってみよう
+
+３つの半径値から、球の中心を求める関数。
+
+```{r}
+my.triple.spheres <- function(r){# r = c(r_1,r_2,r_3)
+  ret <- matrix(0,3,3)
+  ret[1,] <- c(0,0,r[1])
+  ret[2,] <- c(2*sqrt(r[1]*r[2]),0,r[2])
+  theta <- acos((r[1]*r[2]+r[1]*r[3]-r[2]*r[3])/(2*r[1]*sqrt(r[2]*r[3])))
+  ret[3,] <- c(2*sqrt(r[1]*r[3])*cos(theta),2*sqrt(r[1]*r[3])*sin(theta),r[3])
+  
+  return(ret)
+}
+```
+
+球面乱点を生成する関数。
+
+```{r}
+my.random.sphere <- function(X,r,n=1000){
+  ret <- matrix(rnorm(n*3),ncol=3)
+  ret <- ret/sqrt(apply(ret^2,1,sum))*r
+  ret <- t(t(ret) + X)
+  return(ret)
+}
+```
+
+描いてみる。
+
+```{r, webgl=TRUE}
+# xy平面
+x <- y <- seq(from=-10,to=10,length=100)
+xy <- as.matrix(expand.grid(x,y))
+xy. <- cbind(xy,rep(0,length(xy[,1])))
+
+r1 <- 1
+r2 <- 1.5
+r3 <- pi
+rs <- c(r1,r2,r3)
+
+centers <- my.triple.spheres(rs)
+n <- 2000
+S1 <- my.random.sphere(centers[1,],r1,n=n)
+S2 <- my.random.sphere(centers[2,],r2,n=n)
+S3 <- my.random.sphere(centers[3,],r3,n=n)
+
+S123 <- rbind(S1,S2,S3)
+tmp <- range(S123)
+S123.xy <- rbind(S123,xy.)
+plot3d(rbind(S123.xy,rep(tmp[1],3),rep(tmp[2],3)),xlab="x",ylab="y",zlab="z",xlim=tmp,ylim=tmp,zlim=tmp)
+segments3d(rbind(centers[1,],c(centers[1,1:2],0)),col=2,lw=5)
+segments3d(rbind(centers[2,],c(centers[2,1:2],0)),col=2,lw=5)
+segments3d(rbind(centers[3,],c(centers[3,1:2],0)),col=2,lw=5)
+
+segments3d(centers[1:2,],col=3,lw=5)
+segments3d(centers[2:3,],col=3,lw=5)
+segments3d(centers[c(3,1),],col=3,lw=5)
+
+
+```
+
+以上は、双曲空間の上半モデルである。
+
+描いた３つの球は、xy平面に接しており、その接点は、無限遠cusp点に相当し、cusp点からの等距離点集合～ホロサイクルに相当する。
+
+今、３個のcusp点を結ぶ双曲空間測地線は三角形を定めるが、測地線はホロサイクルと直交しており、ホロサイクル同士は接していることから、測地線のうち、ホロサイクルに挟まれる弧長はゼロである。
+
+弧長L=0に対応するλ-lengthは$exp(L)=exp(0)=1$であるから、この三角形は、λ-lengthで測ると３辺の長さが１で等しい「単位正三角形」とみなせる。
+
+## ポアンカレディスクモデル(3D版 球体モデル)への変換
+
+### 反転変換
+
+メビウス変換は、円周・球面(等)に関する反転変換である。
+
+この変換では、円と直線とが同類であり、平面と球面とが同類となるような変換である。
+
+座標の変換を式で書くと
+
+$$
+\mathbf{x'} = (x_i') = (r^2\frac{x_i}{\sum_{j}x_j^2})
+$$
+
+となる。これは、原点を中心とした半径rの円周・球面に関する反転である。
+
+半径rの円周・球面上の点は不動であり、外側の点は内部に移り、内部の点は外側に移る。
+
+この反転変換を用いて、無限遠点の集合であるxy平面を球面に移し、上半空間をその球面の内部に移すこととする。
+
+
+
+```{r}
+my.inversion <- function(x,r=1){
+  ret <- r^2 * x/sum(x^2)
+  return(ret)
+}
+```
+
+
+上半空間を半径１の球の外側に置くために、z座標に1を加えた上で、
+半径１の球面について反転する。
+
+さらに工夫して、上半空間を原点を中心とした単位球に移すために、
+z座標に2を加え、半径2の球面について反転した上で、z軸方向に-1平行移動させることとする。
+
+```{r}
+my.poincare.inversion <- function(x){
+  x. <- x
+  x.[,3] <- x.[,3] + 2
+  D <- t(apply(x.,1,my.inversion,r=2))
+  D[,3] <- D[,3] - 1
+  return(D)
+}
+```
+```{r}
+rgl.close()
+```
+```{r,webgl=TRUE}
+D <- my.poincare.inversion(S123)
+D.plane <- my.poincare.inversion(xy.)
+inversion.sphere <- my.random.sphere(c(0,0,0),2)
+
+plot3d(inversion.sphere)
+spheres3d(D.plane,radius=0.01,col=2)
+spheres3d(D,radius=0.01,col=3)
+```
+
+## 3ホロサイクル球が接しているとき、その三角形内部に３つの三角形を作り、それに対応するホロサイクル球を求めたい
+
+```{r}
+r4 <- seq(from = 0, to = centers[3,3],length=100)
+v4s <- matrix(0,length(r4),3)
+for(i in 1:length(r4)){
+  tmp.rs <- c(rs[1:2],r4[i])
+  v4s[i,] <- my.triple.spheres(tmp.rs)[3,]
+}
+```
+
+```{r,webgl=TRUE}
+plot3d(v4s)
+```
+これらは、第１球、第２球と接する球の中心座標列。
+
+この中に、第３球と接するものがあるかどうかを確認する。
+```{r}
+len123 <- matrix(0,length(r4),3)
+for(i in 1:length(r4)){
+  len123[i,1] <- sqrt(sum((centers[1,]-v4s[i,])^2)) - (centers[1,3]+r4[i])
+  len123[i,2] <- sqrt(sum((centers[2,]-v4s[i,])^2)) - (centers[2,3]+r4[i])
+  len123[i,3] <- sqrt(sum((centers[3,]-v4s[i,])^2)) - (centers[3,3]+r4[i])
+}
+matplot(len123,type="l")
+```
+
+
+```{r}
+# X : 3 x 3 matrix. Each row is the location of three horospheres
+my.intra.horosphere <- function(X){
+  ret <- rep(0,3)
+  M <- matrix(0,3,3)
+  tmp <- c(1:3,1)
+  a <- rep(0,3)
+  for(i in 1:3){
+    M[i,1] <- 2 * (X[tmp[i+1],1] - X[tmp[i],1]) 
+    M[i,2] <- 2 * (X[tmp[i+1],2] - X[tmp[i],2])
+    M[i,3] <- (-4) * (X[tmp[i+1],3] - X[tmp[i],3])
+    
+    a[i] <- sum(X[tmp[i+1],1:2]^2) - sum(X[tmp[i],1:2]^2)
+  }
+  ret <- MASS::ginv(M[1:2,]) %*% a[1:2]
+  
+  #ret.xy <- solve(M[1:2,1:2],a[1:2])
+  #ret.z1 <- 1/(4*X[1,3]) * ((ret.xy[1]-X[1,1])^2+(ret.xy[2]-X[1,2])^2)
+  #ret.z2 <- 1/(4*X[2,3]) * ((ret.xy[1]-X[2,1])^2+(ret.xy[2]-X[2,2])^2)
+  #ret.z3 <- 1/(4*X[3,3]) * ((ret.xy[1]-X[3,1])^2+(ret.xy[2]-X[3,2])^2)
+  #ret <- c(ret.xy,ret.z1,ret.z2,ret.z3)
+  return(ret)
+}
+```
+
+```{r}
+X <- centers
+x <- seq(from=1.9,to=2.0,length=50)
+y <- seq(from=3.8,to=4,length=50)
+z <- seq(from=0.4,to=5,length=50)
+xyz <- as.matrix(expand.grid(x,y,z))
+
+f <- function(x){((X[1,1]-x[1])^2+(X[1,2]-x[2])^2-4*X[1,3]*x[3])^2 + ((X[2,1]-x[1])^2+(X[2,2]-x[2])^2-4*X[2,3]*x[3])^2 + ((X[3,1]-x[1])^2+(X[3,2]-x[2])^2-4*X[3,3]*x[3])^2}
+apply(xyz,1,f) -> qqq
+plot(qqq)
+range(qqq)
+```
+```{}
+x <- y <- 10^seq(from=-5,to=5,length=100)
+xy <- expand.grid(x,y)
+xyz <- cbind(xy,rep(1,length(xy[,1])))
+D2 <- t(apply(xyz,1,my.hyperbolic.transform,r=1))
+
+plot3d(D2)
+```

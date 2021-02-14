@@ -1,0 +1,72 @@
+---
+title: "Mantel Test for correlation of two feature sets of single cell data sets"
+author: "Yamada Ryo"
+date: "2020/11/4"
+output: html_document
+---
+
+## Input data sets
+
+Let's assume we have two data sets, X and Y, that are the data record matrices of single cell measurementes.
+
+Both are already prepared for UMAP, X and Y.
+
+X and Y are number-of-sample x number-of-feature matrices and the order of single cells are matched between X and Y.
+
+Let's assume $k_X, k_Y$ are already given so that they produce appropriate dimension reduction maps for X and Y, respectively.
+
+Random data sets are generated below.
+
+Appropriate $k_X,k_Y$ are somehow given.
+```{r}
+n.cell <- 100
+n.feature_X <- 50
+n.feature_Y <- 100
+X <- matrix(rnorm(n.cell*n.feature_X),ncol=n.feature_X)
+Y <- matrix(rnorm(n.cell*n.feature_Y),ncol=n.feature_Y)
+k_X <- 10
+k_Y <- 20
+```
+
+
+```{r}
+library(umap)
+library(vegan)
+library(igraph)
+
+# X and Y are well-prepared and given
+# k_X, k_Y are given
+# UMAP
+umap_X <- umap(X,n_neighbors=k_X)
+umap_Y <- umap(Y,n_neighbors=k_Y)
+
+# Take out knn-graph object
+knn_X <- umap_X$knn 
+knn_Y <- umap_Y$knn
+
+# Make edge lists
+edge.listX <- edge.listY <- matrix(0,0,2)
+
+for(i in 1:n.cell){
+  edge.listX <- rbind(edge.listX,cbind(rep(i,k_X-1),knn_X[[1]][i,2:k_X]))
+  edge.listY <- rbind(edge.listY,cbind(rep(i,k_Y-1),knn_Y[[1]][i,2:k_Y]))
+}
+
+# Make a graph object of igraph
+gX <- graph.edgelist(edge.listX,directed=FALSE)
+gY <- graph.edgelist(edge.listY,directed=FALSE)
+
+# Graph distance matrix
+dist.gX <- distances(gX,weights = c(t(knn_X[[2]][,2:k_X])))
+dist.gY <- distances(gY,weights = c(t(knn_Y[[2]][,2:k_Y])))
+
+# Mantel test
+mantel.out <- mantel(dist.gX,dist.gY,method="spearman",permutations=1000,na.rm=TRUE)
+
+print(mantel.out)
+```
+```{r}
+# Correlation coefficient distribution
+hist(mantel.out$perm)
+```
+
