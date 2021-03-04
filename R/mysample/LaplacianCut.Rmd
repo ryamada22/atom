@@ -1,0 +1,234 @@
+---
+title: "グラフラプラシアンと二階微分ゼロの分布"
+author: "ryamada"
+date: "2021年2月20日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(igraph)
+library(GA)
+```
+```{r}
+my.Laplacian <- function(g){
+  A <- get.adjacency(g)
+  L <- diag(degree(g)) - A
+  return(L)
+}
+```
+## 鎖状グラフ
+
+```{r}
+n <- 100
+el <- cbind(1:(n-1),2:n)
+g <- graph.edgelist(el,directed=FALSE)
+plot(g)
+```
+```{r}
+L <- my.Laplacian(g)
+eout <- eigen(L)
+image(sign(eout[[2]]))
+plot(eout[[1]])
+```
+```{r}
+vn <- length(eout[[1]])
+ev.sign <- eout[[2]] > 0
+labs <- eout[[2]]
+labs[,1] <- ev.sign[,vn]
+for(i in 2:vn){
+  labs[,i] <- apply(ev.sign[,vn:(vn-i+1)],1,binary2decimal)
+}
+n.plot <- 10
+for(i in 1:n.plot){
+  plot(g,vertex.color=rank(labs[,i]))
+}
+```
+
+```{r}
+eout2 <- eigen(eout[[2]])
+plot(eout2[[1]])
+plot(Arg(eout2[[1]]))
+```
+
+## サイクル
+
+```{r}
+n <- 100
+el <- cbind(1:n,c(2:n,1))
+g <- graph.edgelist(el,directed=FALSE)
+plot(g)
+```
+```{r}
+L <- my.Laplacian(g)
+eout <- eigen(L)
+image(sign(eout[[2]]))
+plot(eout[[1]])
+```
+```{r}
+vn <- length(eout[[1]])
+ev.sign <- eout[[2]] > 0
+labs <- eout[[2]]
+labs[,1] <- ev.sign[,vn]
+for(i in 2:vn){
+  labs[,i] <- apply(ev.sign[,vn:(vn-i+1)],1,binary2decimal)
+}
+n.plot <- 10
+for(i in 1:n.plot){
+  plot(g,vertex.color=rank(labs[,i]))
+}
+```
+```{r}
+eout2 <- eigen(eout[[2]])
+plot(eout2[[1]])
+plot(Arg(eout2[[1]]))
+```
+## 完全グラフ
+
+```{r}
+n <- 20
+A <- matrix(1,n,n)
+diag(A) <- 0
+g <- graph.adjacency(A,mode="undirected")
+plot(g)
+```
+```{r}
+L <- my.Laplacian(g)
+eout <- eigen(L)
+image(sign(eout[[2]]))
+plot(eout[[1]])
+```
+```{r}
+vn <- length(eout[[1]])
+ev.sign <- eout[[2]] > 0
+labs <- eout[[2]]
+labs[,1] <- ev.sign[,vn]
+for(i in 2:vn){
+  labs[,i] <- apply(ev.sign[,vn:(vn-i+1)],1,binary2decimal)
+}
+n.plot <- 10
+for(i in 1:n.plot){
+  plot(g,vertex.color=rank(labs[,i]))
+}
+```
+## 星形グラフ
+
+```{r}
+n <- 10
+g <- make_star(n,mode="undirected")
+plot(g)
+```
+```{r}
+L <- my.Laplacian(g)
+eout <- eigen(L)
+image(sign(eout[[2]]))
+plot(eout[[1]])
+```
+```{r}
+vn <- length(eout[[1]])
+ev.sign <- eout[[2]] > 0
+labs <- eout[[2]]
+labs[,1] <- ev.sign[,vn]
+for(i in 2:vn){
+  labs[,i] <- apply(ev.sign[,vn:(vn-i+1)],1,binary2decimal)
+}
+n.plot <- 10
+for(i in 1:n.plot){
+  plot(g,vertex.color=rank(labs[,i]))
+}
+```
+## 木グラフ
+```{r}
+m <- 5
+num.kid <- 2
+g <- make_tree(sum(num.kid^(0:m)),children=num.kid,mode="undirected")
+plot(g)
+```
+```{r}
+L <- my.Laplacian(g)
+eout <- eigen(L)
+image(sign(eout[[2]]))
+plot(eout[[1]])
+```
+```{r}
+vn <- length(eout[[1]])
+ev.sign <- eout[[2]] > 0
+labs <- eout[[2]]
+labs[,1] <- ev.sign[,vn]
+for(i in 2:vn){
+  labs[,i] <- apply(ev.sign[,vn:(vn-i+1)],1,binary2decimal)
+}
+n.plot <- 10
+for(i in 1:n.plot){
+  plot(g,vertex.color=round(rank(labs[,i])))
+}
+```
+
+## Random graph
+
+```{r}
+n <- 100
+A <- matrix(sample(0:1,n^2,replace=TRUE),n,n)
+A <- A + t(A)
+diag(A) <- 0
+A[which(A>0)] <- 1
+g <- graph.adjacency(A,mode="undirected")
+plot(g)
+is.connected(g)
+```
+```{r}
+L <- my.Laplacian(g)
+eout <- eigen(L)
+image(sign(eout[[2]]))
+plot(eout[[1]])
+```
+```{r}
+vn <- length(eout[[1]])
+ev.sign <- eout[[2]] > 0
+labs <- eout[[2]]
+labs[,1] <- ev.sign[,vn]
+for(i in 2:vn){
+  labs[,i] <- apply(ev.sign[,vn:(vn-i+1)],1,binary2decimal)
+}
+n.plot <- 10
+for(i in 1:n.plot){
+  plot(g,vertex.color=round(rank(labs[,i])))
+}
+```
+
+## 二つの完全グラフの連結
+```{r}
+n1 <- 5
+n2 <- 20
+A <- matrix(0,n1+n2,n1+n2)
+A[1:n1,1:n1] <- 1
+A[(n1+1):(n1+n2),(n1+1):(n1+n2)] <- 1
+diag(A) <- 0
+A[3,n1+3] <- A[n1+3,3] <- 1
+g <- graph.adjacency(A,mode="undirected")
+plot(g)
+```
+
+```{r}
+L <- my.Laplacian(g)
+eout <- eigen(L)
+image(sign(eout[[2]]))
+plot(eout[[1]])
+```
+```{r}
+vn <- length(eout[[1]])
+ev.sign <- eout[[2]] > 0
+labs <- eout[[2]]
+labs[,1] <- ev.sign[,vn]
+for(i in 2:vn){
+  labs[,i] <- apply(ev.sign[,vn:(vn-i+1)],1,binary2decimal)
+}
+n.plot <- 10
+for(i in 1:n.plot){
+  plot(g,vertex.color=round(rank(labs[,i])))
+}
+```
+

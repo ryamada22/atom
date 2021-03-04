@@ -1,0 +1,41 @@
+---
+title: "umap"
+author: "Tomohiro Takahashi"
+date: "2020/11/4"
+output: html_document
+---
+```{r}
+library(umap)
+library(vegan)
+```
+
+## 2変数
+```{r}
+d_x<-read.csv("umap_coordinates_shape_movement_aligned.csv")
+d_y<-read.csv("Count_for_iDEP.csv")
+data_x<-d_x[,c(-1,-2)]
+data_y<-d_y[,-1]
+umap_x<-umap(data_x)
+umap_y<-umap(data_y)
+knn_x<-umap_x$knn
+knn_y<-umap_y$knn
+distances_x<-t(knn_x$distances)
+distances_y<-t(knn_y$distances)
+dist.x<-vegdist(distances_x,method="bray")
+dist.y<-vegdist(distances_y,method="bray")
+result<-mantel(dist.x,dist.y,method="spearman",permutations=999,na.rm=TRUE)
+result
+```
+
+## 多変数
+```{r}
+d_z<-read.csv("cell_stat_robust_scaled.csv")
+data_z<-d_z[,c(-1,-2)]
+data_z<-data_z[,-1]
+umap_z<-umap(data_z)
+knn_z<-umap_z$knn
+distances_z<-t(knn_z$distances)
+dist.z<-vegdist(distances_z,method="bray")
+result.2<-mantel(dist.z,dist.y,method="spearman",permutations=999,na.rm=TRUE)
+result.2
+```
