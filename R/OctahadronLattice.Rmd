@@ -1,0 +1,114 @@
+---
+title: "正八面体格子"
+author: "ryamada"
+date: "2021年4月18日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rgl)
+```
+
+## 正四面体の頂点座標
+
+```{r}
+V1 <- c(0,0,1)
+V2 <- c(2*sqrt(2)/3,0,-1/3)
+V3 <- c(-sqrt(2)/3,sqrt(6)/3,-1/3)
+V4 <- c(-sqrt(2)/3,-sqrt(6)/3,-1/3)
+Tetra <- rbind(V1,V2,V3,V4)
+```
+
+```{r}
+plot3d(Tetra)
+segments3d(Tetra[c(1,2,1,3,1,4,2,3,2,4,3,4),])
+```
+1辺の長さを１に補正する
+```{r}
+dist(Tetra)
+Tetra.st <- Tetra/dist(Tetra)[1]
+dist(Tetra.st)
+```
+## 正八面体の頂点座標
+
+```{r}
+W1 <- Tetra.st[1,] + Tetra.st[2,]
+W2 <- Tetra.st[2,] + Tetra.st[3,]
+W3 <- Tetra.st[3,] + Tetra.st[4,]
+W4 <- Tetra.st[4,] + Tetra.st[1,]
+W5 <- Tetra.st[1,] + Tetra.st[3,]
+W6 <- Tetra.st[2,] + Tetra.st[4,]
+Octa <-rbind(W1,W2,W3,W4,W5,W6)
+```
+
+```{r}
+plot3d(Octa)
+segments3d(Octa[c(1,2,1,4,1,5,1,6,2,3,2,5,2,6,3,4,3,5,3,6,4,5,4,6),])
+```
+
+
+```{r}
+dist(Octa)
+```
+
+
+## ピラミッド
+
+ベクトル
+```{r}
+e12 <- Tetra[1,] - Tetra[2,]
+e13 <- Tetra[1,] - Tetra[3,]
+e14 <- Tetra[1,] - Tetra[4,]
+e23 <- Tetra[2,] - Tetra[3,]
+e24 <- Tetra[2,] - Tetra[4,]
+e34 <- Tetra[3,] - Tetra[4,]
+
+E <- rbind(e12,e13,e14,e23,e24,e34)
+```
+
+e13,e23,e34,e41=-e14の４ベクトルが係数a13+a23+a34+a41 = 0,1,2,3,4,..., aij>=0を満足する点の集合
+
+```{r}
+nv <- 4
+k <- 20
+face <- as.matrix(expand.grid(rep(list(0:k),nv-2)))
+n.row <- length(face[,1])
+lat.face <- rbind(cbind(face,rep(0,n.row),rep(0,n.row)),cbind(face[,1],rep(0,n.row),rep(0,n.row),face[,2]),cbind(rep(0,n.row),face,rep(0,n.row)),cbind(rep(0,n.row),rep(0,n.row),face))
+#lat <- as.matrix(expand.grid(rep(list(0:k),nv)))
+#lat <- lat[which(apply(lat,1,sum) == k),]
+#lat <- rbind(lat,lat.face)
+lat <- lat.face
+lat <- lat[which(apply(lat,1,sum)<= k),]
+```
+
+```{r}
+scl <- 1/20
+E.4 <- rbind(E[4,],-E[1,],-E[3,],-E[6,])
+G <- lat %*%  E.4 * scl
+plot3d(G)
+```
+
+
+$$
+\cos(x/2) + \sin(y^2/3)  + 2 < abs(z)
+x^2 + y^2 + z^2 < 4^2
+$$
+```{r}
+#inside <- which(cos(G[,1]*5) + sin(G[,2]*4/3) - abs(G[,3]) < 0.5 & G[,1]^2+G[,2]^2+G[,3]^2 < 1)
+inside <- which(G[,1]^2+G[,2]^2+G[,3]^2 < 1)
+plot3d(G[inside,])
+```
+
+```{r}
+library(geometry)
+#d = c(-1,1)
+#pc = as.matrix(rbind(expand.grid(d,d,d),0))
+pc = G
+tc = convhulln(pc,return.non.triangulated.facets=TRUE)
+# example tetramesh
+#clr = rep(1,3) %o% (1:nrow(tc)+1)
+#rgl::rgl.viewpoint(60,fov=20)
+#rgl::rgl.light(270,60)
+#trimesh(tc,pc,alpha=0.7,col=clr)
+```
