@@ -1,0 +1,57 @@
+---
+title: "XOR_swap"
+author: "ryamada"
+date: "2021年8月13日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 杉山さんの XOR_algorithm
+
+Wikipediaのページ https://en.wikipedia.org/wiki/XOR_swap_algorithm によると
+
+(1,2) -> (2,1)の互換を実現する置換行列 Pが以下のように行列の積で表せるとされています。
+
+
+$$
+P = \begin{pmatrix}0 & 1 \\ 1 & 0 \end{pmatrix} \\
+  = \begin{pmatrix}1 & -1 \\ 0 & 1 \end{pmatrix} \begin{pmatrix}1 & 0 \\ 1 & -1 \end{pmatrix} \begin{pmatrix}1 & 1 \\ 0 & 1 \end{pmatrix}
+$$
+
+この置換行列Pは、左から作用すると、任意の正方行列の第１、第２行の入れ替えを行い、
+右から$P^T$を作用させると、任意の正方行列の第１、第２列の入れ替えを行います。
+
+従って、$P M P^T$により、正方行列Mの行と列とがそれぞれ入れ替わります。
+
+『任意の正方行列』の行置換・列置換をしてくれる行列である、というのが「ミソ」です。
+
+
+## 団代数での例
+
+他方、団代数では、団代数の種の行列(歪対称行列)ごとに、行・列置換の行列が定まります。
+
+(1,2)の例では、２頂点有向グラフからスタートするので、その歪対称行列は
+$$
+B = \begin{pmatrix} 0 & 1\\ -1 & 0 \end{pmatrix}
+$$
+です。
+
+これについて、団代数的に行・列置換を行うには、以下のような変換をすればよいことが示せます。
+
+ここでは天下り的に与えます。
+
+$$
+P B P^T = \begin{pmatrix} 1 & 1\\ 0 & -1 \end{pmatrix} \begin{pmatrix} -1 & 0\\ 1 & 1 \end{pmatrix} B \begin{pmatrix} -1 & 0\\ 1 & 1 \end{pmatrix}^T \begin{pmatrix} 1 & 1\\ 0 & -1 \end{pmatrix}^T
+$$
+
+ただし、この行・列置換はB依存なので
+
+$$
+\begin{pmatrix}0 & 1 \\ 1 & 0 \end{pmatrix} =P \ne  \begin{pmatrix} 1 & 1\\ 0 & -1 \end{pmatrix} \begin{pmatrix} -1 & 0\\ 1 & 1 \end{pmatrix} = \begin{pmatrix}0 & 1 \\ -1 & -1 \end{pmatrix}
+$$
+
+です。
+
