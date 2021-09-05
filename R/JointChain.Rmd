@@ -1,0 +1,432 @@
+---
+title: "ラケット操作"
+author: "ryamada"
+date: "2021年9月4日"
+output: html_document
+---
+
+```{r, setup}
+library(knitr)
+opts_chunk$set(echo = TRUE)
+
+library(rgl)
+#options(rgl.useNULL = TRUE)
+#options(rgl.printRglwidget = TRUE) 
+knit_hooks$set(rgl = hook_webgl)
+
+```
+
+## ラケットの面を作る
+
+### 構成要素
+
+#### シャフト要素
+
+* 体幹 T = $S_1$
+* 鎖骨 C = $S_2$
+* 上腕 U = $S_3$
+* 前腕 F = $S_4$
+* 手 H = $S_5$
+* ラケット R = $S_6$
+
+すべてのシャフト要素は、上面を斜めに切断した半径１の円柱状とする。
+
+円柱を以下の要素で定義する。
+
+* 下面中心３次元座標 Q_X
+* 下面正規直交基底 Q_e
+* 長さスカラー Q_L
+* 上面正規直交基底が下面正規直交基底をどのように回転したものかを表す回転行列 Q_P
+
+ただし$Q_i$の上面と$Q_{i+1}$の下面とが一致している状態を２シャフト間の関節の基本状態とし、$Q_{i+1}$の下面は３次元にて自由に回転できるものとする。
+
+
+また、ラケットの次接続関節面情報は、ラケットの打球面を表す。
+
+
+#### 関節要素
+
+* 胸鎖 $J_1$ : 回転行列$R_1$
+* 肩 $J_2$ : $R_2$
+* 肘 $J_3$ : $R_3$
+* 手首 $J_4$ : $R_4$
+* 握り $J_5$ : $R_5$
+
+いずれの関節も、３次元の全方向への自由度を原則として与え、追って、制約を加える。
+
+関節によるシャフトの上面と下面との関係は、３次元回転行列で定める。
+
+#### 回転の考え方
+
+基準となる基底Aから、回転Rして、新たな基底Bになるとき
+
+$$
+B = RA
+$$
+
+このRが、ある標準規定Eの下で定まっているときには、
+
+基準となる基底A'から、回転R'して、新たな基底B'になるときのA’とB’との相対的な関係がAとBとの相対的な関係に一致するとは：
+
+$$
+A' = QA\\
+B' = QB\\
+B = RA\\
+B' = R'A'\\
+$$
+なので
+
+$$
+QB = R' QA\\
+QRA = R'QA\\
+R' = QRAA^{-1}Q^{-1}\\
+R' = QRQ^{-1}
+$$
+
+## Rで実装
+
+関節によって、鎖状に連続するシャフトのセットとして一般化して実装する
+
+```{r}
+my_jointChain <- function(Ls,Ps=rep(list(diag(rep(1,3))),length(Ls)),Rs=rep(list(diag(rep(1,3))),length(Ls)-1),x1=c(0,0,0),e1=diag(rep(1,3))){
+
+  Js <- Rs
+  Ss <- list()
+
+  Ss[[1]] <- list(xs=x1,es=e1,L=Ls[1],xe=x1+e1[,3]*Ls[1],ee=Ps[[1]] %*% e1)
+  
+  n <- length(Ls)
+  for(i in 2:n){
+    xs <- Ss[[i-1]]$xe
+    es <- Js[[i-1]] %*% Ss[[i-1]]$ee
+    xe <- xs+es[,3] *Ls[i]
+    ee <- Ps[[i]] %*% es
+    Ss[[i]] <- list(xs=xs,es=es,L=Ls[i], xe=xe,ee=ee )
+  }
+  return(list(Ss=Ss,Js=Js))
+}
+```
+
+```{r}
+my_plot_shuft <- function(S,n=100,noplot=TRUE,rs = c(1,1)){
+  t <- seq(from=0,to=1,length=n)
+  t2 <- t * 2 * pi
+  xsxe <- rbind(S$xs,S$xe)
+  tmp <- cbind(cos(t2),sin(t2),rep(0,n)) 
+  tmp2 <- t(S$es %*% t(tmp * rs[1]))
+  tmp3 <- t(S$ee %*% t(tmp * rs[2]))
+  tmp2. <- t(t(tmp2) + xsxe[1,])
+  tmp3. <- t(t(tmp3) + xsxe[2,])
+  tmp4 <- matrix(0,length(t),3)
+  for(i in 1:3){
+    tmp4[,i] <- xsxe[1,i] * t + xsxe[2,i] * (1-t)
+  }
+  
+  ret <- rbind(xsxe,tmp2.,tmp3.,tmp4)
+  if(!noplot){
+    plot3d(ret)
+  }
+  
+  return(ret)
+}
+```
+```{r}
+my_plot_shuft2 <- function(S,n=100,noplot=TRUE,rs = c(1,1),R=1){
+  t <- seq(from=0,to=1,length=n)
+  t2 <- t * 2 * pi
+  xsxe <- rbind(S$xs,S$xe)
+  tmp <- cbind(cos(t2),sin(t2),rep(0,n)) 
+  tmp2 <- t(S$es %*% t(tmp * rs[1]))
+  tmp3 <- t(S$ee %*% t(tmp * rs[2]))
+  tmp2. <- t(t(tmp2) + xsxe[1,])
+  tmp3. <- t(t(tmp3) + xsxe[2,])
+  tmp4 <- matrix(0,length(t),3)
+  for(i in 1:3){
+    tmp4[,i] <- xsxe[1,i] * t + xsxe[2,i] * (1-t)
+  }
+  
+  #ret <- rbind(xsxe,tmp2.,tmp3.,tmp4)
+  #ret <- rbind(xsxe,tmp2.,tmp3.)
+  ret <- rbind(tmp2.,tmp3.)
+  for(i in 1:length(tmp4[,1])){
+    tmp4. <- t(t(tmp2/rs[1]*R) + tmp4[i,])
+    ret <- rbind(ret,tmp4.)
+  }
+  if(!noplot){
+    plot3d(ret)
+  }
+  
+  return(ret)
+}
+```
+
+```{r}
+my_plot_racket <- function(out,racket.size=5,noplot=TRUE){
+  x <- matrix(0,0,3)
+  for(i in 1:length(out$Ss)){
+    rs <- c(1,1)
+    if(i==length(out$Ss)){
+      rs <- c(1,racket.size)
+    }
+    tmpout <- my_plot_shuft(out$Ss[[i]],rs=rs)
+  x <- rbind(x,tmpout)
+  }
+  #rg <- range(x)
+  rg <- c(-150,150)
+  x. <- rbind(x,rep(rg[1],3),rep(rg[2],3))
+  if(!noplot){
+    plot3d(x.)
+  }
+  return(x.)
+}
+```
+```{r}
+my_plot_racket2 <- function(out,racket.size=5,noplot=TRUE,rs=c(1,1),R=1,n=20){
+  x <- matrix(0,0,3)
+  for(i in 1:length(out$Ss)){
+    rs <- rs
+    if(i==length(out$Ss)){
+      rs <- c(1,racket.size)
+    }
+    tmpout <- my_plot_shuft2(out$Ss[[i]],n=n,rs=rs,R=R)
+    x <- rbind(x,tmpout)
+  }
+  #rg <- range(x)
+  #rg <- c(-150,150)
+  #x. <- rbind(x,rep(rg[1],3),rep(rg[2],3))
+
+  if(!noplot){
+    plot3d(x)
+  }
+  return(x)
+}
+```
+```{r}
+Ls <- c(10,6)
+out <- my_jointChain(Ls)
+
+x <- matrix(0,0,3)
+for(i in 1:length(out$Ss)){
+  #tmpout <- my_plot_shuft(out$Ss[[i]])
+  tmpout <- my_plot_shuft2(out$Ss[[i]])
+  x <- rbind(x,tmpout)
+}
+rg <- range(x)
+x. <- rbind(x,rep(rg[1],3),rep(rg[2],3))
+plot3d(x.)
+```
+
+
+## ヒトのバドミントン
+
+```{r}
+Ls <- c(35,35,60,20,30,30,5,50)
+Ps <- list()
+#Ps[[1]] <- cbind(c(0,-1,0),c(cos(pi/2),0,sin(pi/2)),c(cos(pi),0,sin(pi)))
+Ps[[1]] <- diag(rep(1,3))
+Ps[[2]] <- diag(rep(1,3))
+Ps[[3]] <- cbind(c(0,0,-1),c(0,1,0),c(1,0,0))
+#Ps[[2]] <- cbind(c(0,-1,0),c(cos(pi),0,sin(pi)),c(cos(pi+pi/2),0,sin(pi+pi/2)))
+Ps[[4]] <- cbind(c(0,0,-1),c(0,1,0),c(1,0,0))
+Ps[[5]] <- diag(rep(1,3))
+#Ps[[6]] <- cbind(c(cos(pi),0,sin(pi)),c(-sin(pi),0,cos(pi)),c(0,-1,0))
+Ps[[6]] <- cbind(c(1,0,0),c(0,0,1),c(0,-1,0))
+Ps[[7]] <- diag(rep(1,3))
+Ps[[8]] <- cbind(c(1,0,0),c(0,0,1),c(0,-1,0))
+#Ps[[8]] <- diag(rep(1,3))
+Rs=rep(list(diag(rep(1,3))),length(Ls)-1)
+#theta <- 0
+#Rs[[4]] <- cbind(c(0,0,1),c(cos(theta),sin(theta),0),c(-sin(theta),cos(theta),0))
+
+out <- my_jointChain(Ls,Ps,Rs)
+
+#out.racket <- my_plot_racket(out)
+n <- 30
+out.racket2 <- my_plot_racket2(out,n=n,rs=c(2,2),R=1)
+fr <- rbind(c(80,80,150),c(-80,-80,-10))
+plot3d(rbind(out.racket2,fr))
+
+t <- seq(from=0,to=1,length=n)
+col <- rgb(t,1-t,rep(1,n))
+spheres3d(out.racket2,radius=0.1,color=col)
+```
+
+```{r}
+
+Rs=rep(list(diag(rep(1,3))),length(Ls)-1)
+theta <- 0.3
+Rs[[4]] <- cbind(c(1,0,0),c(0,cos(theta),sin(theta)),c(0,-sin(theta),cos(theta)))
+
+out <- my_jointChain(Ls,Ps,Rs)
+
+#out.racket <- my_plot_racket(out)
+n <- 30
+out.racket2 <- my_plot_racket2(out,n=n,rs=c(2,2),R=1)
+fr <- rbind(c(80,80,150),c(-80,-80,-10))
+plot3d(rbind(out.racket2,fr))
+
+t <- seq(from=0,to=1,length=n)
+col <- rgb(t,1-t,rep(1,n))
+spheres3d(out.racket2,radius=0.5,color=col)
+```
+
+```{r}
+n.iter <- 5
+n <- 30
+thetas <- seq(from=0,to=1,length=n.iter) * pi/2
+out.rackets <- matrix(0,0,3)
+for(i in 1:n.iter){
+  theta <- thetas[i]
+  Rs[[4]] <- cbind(c(1,0,0),c(0,cos(theta),sin(theta)),c(0,-sin(theta),cos(theta)))
+  out <- my_jointChain(Ls,Ps,Rs)
+
+  out.racket <- my_plot_racket2(out,n=n,rs=c(2,2),R=1)
+  out.rackets <- rbind(out.rackets,out.racket)
+}
+fr <- rbind(c(80,80,150),c(-80,-80,-10))
+plot3d(rbind(out.rackets,fr))
+t <- seq(from=0,to=1,length=n)
+col <- rgb(t,1-t,rep(1,n))
+spheres3d(out.rackets,radius=0.5,color=col)
+```
+
+```{r}
+n.iter <- 5
+thetas <- seq(from=0,to=1,length=n.iter) * pi/4
+thetas2 <- pi/4 + thetas
+out.rackets <- matrix(0,0,3)
+for(i in 1:n.iter){
+  theta <- thetas[i]
+  theta2 <- thetas2[i]
+  Rs[[4]] <- cbind(c(1,0,0),c(0,cos(theta),sin(theta)),c(0,-sin(theta),cos(theta)))
+
+  Rs[[5]] <- cbind(c(1,0,0),c(0,cos(theta2),sin(theta2)),c(0,-sin(theta2),cos(theta2)))
+  out <- my_jointChain(Ls,Ps,Rs)
+
+  out.racket <- my_plot_racket2(out,n=n,rs=c(2,2),R=1)
+  out.rackets <- rbind(out.rackets,out.racket)
+}
+fr <- rbind(c(80,80,150),c(-80,-80,-10))
+plot3d(rbind(out.rackets,fr))
+t <- seq(from=0,to=1,length=n)
+col <- rgb(t,1-t,rep(1,n))
+spheres3d(out.rackets,radius=0.5,color=col)
+```
+
+```{r,test-rgl,webgl=TRUE}
+n.iter <- 5
+thetas <- seq(from=0,to=1,length=n.iter) * pi/4
+thetas2 <- pi/4 + thetas
+out.rackets <- matrix(0,0,3)
+for(i in 1:n.iter){
+  theta <- thetas[i]
+  theta2 <- thetas2[i]
+  Rs[[3]] <- cbind(c(cos(-theta/2),sin(-theta/2),0),c(-sin(-theta/2),cos(-theta/2),0),c(0,0,1))
+  Rs[[4]] <- cbind(c(1,0,0),c(0,cos(theta),sin(theta)),c(0,-sin(theta),cos(theta)))
+  Rs[[4]] <- cbind(c(0,cos(theta*2),sin(theta*2)),c(1,0,0),c(0,-sin(theta*2),cos(theta*2))) %*% Rs[[4]]
+  Rs[[5]] <- cbind(c(1,0,0),c(0,cos(theta2),sin(theta2)),c(0,-sin(theta2),cos(theta2)))
+  out <- my_jointChain(Ls,Ps,Rs)
+
+  out.racket <- my_plot_racket2(out,n=n,rs=c(2,2),R=1)
+  out.rackets <- rbind(out.rackets,out.racket)
+}
+fr <- rbind(c(80,80,150),c(-80,-80,-10))
+plot3d(rbind(out.rackets,fr))
+t <- seq(from=0,to=1,length=n)
+col <- rgb(t,1-t,rep(1,n))
+spheres3d(out.rackets,radius=0.5,color=col)
+```
+
+```{r,test-rgl,webgl=TRUE}
+library(GPArotation)
+n.iter <- 5
+thetas <- seq(from=0,to=1,length=n.iter) * pi/4
+thetas2 <- pi/4 + thetas
+out.rackets <- matrix(0,0,3)
+
+RR <- Random.Start(3)
+Rs[[4]] <- RR
+for(i in 1:n.iter){
+  theta <- thetas[i]
+  theta2 <- thetas2[i]
+  Rs[[3]] <- cbind(c(cos(-theta/2),sin(-theta/2),0),c(-sin(-theta/2),cos(-theta/2),0),c(0,0,1))
+  Rs[[4]] <- cbind(c(1,0,0),c(0,cos(theta),sin(theta)),c(0,-sin(theta),cos(theta)))
+  Rs[[4]] <- cbind(c(0,cos(theta*2),sin(theta*2)),c(1,0,0),c(0,-sin(theta*2),cos(theta*2))) %*% Rs[[4]]
+  Rs[[4]] <- RR %*% Rs[[4]]
+  Rs[[5]] <- cbind(c(1,0,0),c(0,cos(theta2),sin(theta2)),c(0,-sin(theta2),cos(theta2)))
+  out <- my_jointChain(Ls,Ps,Rs)
+
+  out.racket <- my_plot_racket2(out,n=n,rs=c(2,2),R=1)
+  out.rackets <- rbind(out.rackets,out.racket)
+}
+fr <- rbind(c(80,80,150),c(-80,-80,-10))
+plot3d(rbind(out.rackets,fr))
+t <- seq(from=0,to=1,length=n)
+col <- rgb(t,1-t,rep(1,n))
+spheres3d(out.rackets,radius=0.5,color=col)
+```
+
+```{r}
+x <- matrix(0,0,3)
+for(i in 1:length(out$Ss)){
+  tmpout <- my_plot_shuft(out$Ss[[i]])
+  x <- rbind(x,tmpout)
+}
+rg <- range(x)
+x. <- rbind(x,rep(rg[1],3),rep(rg[2],3))
+plot3d(x.)
+```
+
+## 関節の回転行列
+
+標準姿勢
+```{r}
+stskl<- my_jointChain(Ls,Ps)
+Rs.st <- rep(list(diag(rep(1,3))),length(Ls)-1)
+```
+### 胸鎖関節
+鎖骨の基底は
+
+* (1,0,0)方向に骨が伸び(z方向ベクトル)
+* x,y平面は、(0,0,-1)と(0,1,0)によって張られる矢状面
+```{r}
+stskl$Ss[[4]]$es
+```
+
+肩関節を上下に動かす回転はy軸回りにx軸をz軸方向に動かすのが「上」、その逆が「下」
+
+```{r}
+my_J3_UD <- function(theta,es){
+  tmp <- cbind(c(cos(theta-pi/2),0,sin(theta-pi/2)),c(0,1,0),c(cos(theta),0,sin(theta)))
+  ret <- tmp %*% solve(es)
+  return(ret)
+}
+```
+
+```{r}
+Rs_J3_UD <- Rs.st
+theta <- 0.2
+Rs_J3_UD[[3]] <- my_J3_UD(theta,stskl$Ss[[4]]$es)
+  
+tmp.out <- my_jointChain(Ls,Ps,Rs_J3_UD)
+
+n <- 30
+out.racket2 <- my_plot_racket2(tmp.out,n=n,rs=c(2,2),R=1)
+fr <- rbind(c(80,80,150),c(-80,-80,-10))
+plot3d(rbind(out.racket2,fr))
+
+t <- seq(from=0,to=1,length=n)
+col <- rgb(t,1-t,rep(1,n))
+spheres3d(out.racket2,radius=0.5,color=col)
+```
+
+
+
+### 肩関節
+
+### 肘関節
+
+### 手関節
+
+### 手・ラケットグリップ
+

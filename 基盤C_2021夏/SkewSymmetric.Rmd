@@ -1,0 +1,707 @@
+---
+title: "団代数とSkew-Symmetrizable Matrixとリー群・リー環"
+author: "ryamada"
+date: "2021年6月24日"
+output: html_document
+---
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo = TRUE)
+library(rgl)
+options(rgl.useNULL = TRUE)
+options(rgl.printRglwidget = TRUE) 
+knit_hooks$set(rgl = hook_webgl)
+
+library(GPArotation)
+library(expm)
+library(gtools)
+```
+
+```{r}
+my.B.mut0 <- function(B,k){
+  new.B <- B
+  n <- length(B[,1])
+  tmp <- rep(0,n)
+  tmp[k] <- 1
+  X <- diag(tmp)
+  XB <- X %*% B
+  BX <- B %*% X
+  Y1 <- abs(BX) %*% XB
+  Y2 <- BX %*% abs(XB)
+  tmp2 <- rep(1,n)
+  tmp2[k] <- 0
+  Z <- diag(tmp2)
+  ZBZ <- Z %*% B %*% Z
+  
+  ret <- ZBZ - XB - BX + 1/2 * (Y1 + Y2)
+  return(ret)
+}
+my.B.mut <- function(B,k){
+  new.B <- B
+  n <- length(B[,1])
+  new.B[k,] <- - B[k,]
+  new.B[,k] <- - B[,k]
+  for(i in 1:n){
+    for(j in 1:n){
+      if(i != k){
+        if(j != k){
+          new.B[i,j] <- B[i,j] + sign(B[i,k]) * max(B[i,k]*B[k,j],0)
+        }
+      }
+    }
+  }
+  return(new.B)
+}
+my.B.mut2 <- function(B,k){
+	new.B <- B
+	n <- length(B[,1])
+	rule1 <- FALSE
+	for(i in 1:n){
+		for(j in 1:n){
+			if(i == k || j == k){
+				rule1 <- TRUE
+			}else{
+				rule1 <- FALSE
+			}
+			if(rule1){
+				new.B[i,j] <- -B[i,j]
+			}else{
+				new.B[i,j] <- B[i,j] + 1/2 * (abs(B[i,k]) * B[k,j] + B[i,k] * abs(B[k,j]))
+			}
+		}
+	}
+	return(new.B)
+}
+
+# Tetrahedron n = 6
+n <- 6
+B <- matrix(0,n,n)
+B[1,3] <- B[3,2] <- B[2,1] <- B[3,4] <- B[4,5] <- B[5,3] <- B[2,5] <- B[5,6] <- B[6,2] <- B[1,6] <- B[6,4] <- B[4,1] <- 1
+
+B <- B - t(B)
+B
+
+B1 <- my.B.mut(B,3)
+B2 <- my.B.mut(B1,1)
+
+##
+my.Ebira.mut <- function(B,ks=1:length(B[,1])){
+  ret <- list()
+  n <- length(ks)
+  for(k in 1:n){
+    ret[[k]] <- matrix(0,n,n)
+    for(i in 1:n){
+      for(j in 1:n){
+        if(i == ks[k] | j == ks[k]){
+          ret[[k]][i,j] <- (-1) * B[i,j]
+        }else{
+          tmp1 <- B[i,ks[k]]
+          tmp2 <- -B[ks[k],j]
+          if(tmp1 <= 0){
+            tmp1 <- 0
+          }
+          if(tmp2 <= 0){
+            tmp2 <- 0
+          }
+          ret[[k]][i,j] <- B[i,j] + tmp1 * B[ks[k],j] + tmp2 * B[i,ks[k]]
+        }
+      }
+      
+    }
+  }
+  if(n == 1){
+    return(ret[[1]])
+  }
+  return(ret)
+}
+
+d <- 3
+
+R <- Random.Start(d)
+
+R
+
+R.tan <- logm(R)
+R.tan
+
+my.tan.Rot <- function(R){
+	ret <- logm(R)
+	diag(ret) <- 0
+	return(ret)
+}
+```
+
+
+## Skew-Symmetrizable matrixとその変異
+
+団代数では、$n \times n$ Skew-Symmetrizable matrixが$n$通りの変異をして、別のSkew-Symmetrizable matrixに変わる。
+
+Skew-Symmetric martix $P$に対して、Skew-Symmetrrizable matrix $Q$は、すべての対角成分が正であるような対角行列$A$が存在して
+$$
+Q = AP
+$$
+となることである。
+
+Qの変異 mQはSkew-Symmetrizableであり、確かに、Aの逆行列を作用することでSkew-Symmetricになる。
+
+$$
+A^{-1} mQ
+$$
+
+
+```{r}
+d <- 3
+P <- matrix(rnorm(d^2),d,d)
+P <- P - t(P)
+# Skew-Symmetric
+P
+tmp <- runif(d)
+A <- diag(tmp)
+A
+# Skew-Symmetrizable
+Q <- A %*% P
+Q
+
+mQ <- my.B.mut(Q,1)
+mQ
+A.inv <- diag(1/tmp)
+A.inv %*% mQ # Skew-Symmetri
+```
+
+
+
+## Skew-Symmetric matrixと回転行列の対数関数
+
+回転行列$R$は、Skew-Symmetric matrix $X$を使って
+
+$$
+e^X = R\\
+X = \log{R}
+$$
+と行列指数関数を使って表せる。
+$e^X$は行列$X$の指数関数であり、$\log{R}$は行列$R$の対数関数である。
+
+回転行列$R$をリー群の要素と見ると、$X$はそれに対応するリー代数となる。
+
+回転行列$R$が「回転」を表しているのに対し、行列$X$はその回転行列が作る多様体の$R$における接空間の線形変換に対応し、回転$R$の一次微分に相当している。
+
+```{r}
+R <- Random.Start(d)
+print(round(R %*% t(R),5)) # 単位行列になる＝回転行列
+
+X <- logm(R)
+print(round(X,5)) # Skew-Symmetric
+
+round(X + t(X),5) # 0, Skew-Symmetric
+```
+
+## 団代数のSkew-Symmetric (Skew-Symmetrizable) matricesの関係を、対応する回転行列で考える
+
+Skew-Symmetrizable matrix $Q$とする。
+
+それに対応するSkew-Symmetric matrixを $P_Q$、$P_Q$に対応する回転行列を$R_Q$とする。
+
+$$
+Q = A_Q P_Q\\
+\log{P_Q} = R_Q
+$$
+今、$Q$を$k$-番にて変異したとする。
+
+$$
+Q_k = mut(k)(Q)
+$$
+
+変異を繰り返し、その変異が$\mathbf{k} = (k_1,k_2,...,K)$ としたとき、次のように表すこととする。
+
+$$
+Q_{\mathbf{k}} = mut(k_K)(mut(k_{K-1})...(mut(k_1)(Q)))=\prod_{\mathbf{k}=(k_1,...,k_K)}^{mut}(Q)
+$$
+$$
+Q = A_Q P_Q
+$$
+
+であるとき、
+
+$$
+Q_{\mathbf{k}} =  \prod_{\mathbf{k}=(k_1,...,k_K)}^{mut}(A_QP_Q)
+= A_Q \prod_{\mathbf{k}=(k_1,...,k_K)}^{mut}(P_Q)
+$$
+
+確かめておく。
+
+```{r}
+d <- 20
+P <- matrix(rnorm(d^2),d,d)
+P <- P - t(P)
+# Skew-Symmetric
+#P
+tmp <- runif(d)
+A <- diag(tmp)
+#A
+A.inv <- diag(1/tmp)
+# Skew-Symmetrizable
+Q <- A %*% P
+#Q
+k <- sample(1:d,20,replace=TRUE)
+Qs <- list()
+Qs[[1]] <- Q
+for(i in 1:length(k)){
+  Qs[[i+1]] <- my.B.mut(Qs[[i]],k[i])
+}
+```
+
+```{r}
+for(i in 1:length(Qs)){
+  #print(sum(diag(A.inv %*% Qs[[i]])^2))
+  tmp <- A.inv %*% Qs[[i]]
+  print(sum((tmp + t(tmp))^2)) # skew-symmetric
+}
+```
+
+```{r}
+d <- 3
+P <- matrix(rnorm(d^2),d,d)
+P <- P - t(P)
+# Skew-Symmetric
+#P
+tmp <- runif(d)
+A <- diag(tmp)
+#A
+A.inv <- diag(1/tmp)
+# Skew-Symmetrizable
+Q <- A %*% P
+#Q
+k <- sample(1:d,20,replace=TRUE)
+Ps <- Qs <- Rs <- list()
+Ps[[1]] <- P
+Qs[[1]] <- Q
+Rs[[1]] <- expm(P)
+for(i in 1:length(k)){
+  Qs[[i+1]] <- my.B.mut(Qs[[i]],k[i])
+  Ps[[i+1]] <- A.inv %*% Qs[[i+1]]
+  Rs[[i+1]] <- expm(Ps[[i+1]])
+}
+```
+
+## Skew-Symmetric matrixの変異に対応するSkew-Symmetric matrix
+
+Skew-Symmetric matrix $P$ に対応する回転行列を$R$とする。
+
+$P$と$R$との間には以下の関係がある。
+
+$$
+e^P = R\\
+P = \log{R}
+$$
+
+$P$を$i$によって変異し、$mP_i$を作る。
+
+$mP_i$に対応する回転行列を$mR_i$とする。
+
+$mR_i = \rho_{i,P} R$ なる行列$\rho_{i,P}$は回転行列である。
+
+回転行列$R_{i,P}$に対応するSkew-Symmetric 行列を$\pi_{i,P}$とする。
+
+
+このとき、演算$\otimes_m$を以下のように定義する。
+
+$$
+mP_i = \pi_{i,P} \otimes_m P
+$$
+
+$P,mP_i,\pi_{i,P}$はいずれもSkew-Symmetric matrixであり、そこに演算$\otimes_m$が付随しており、これは、群である(だろう）。
+
+これを、団代数的Skew-Symmetric matrix群とする。
+
+### この計算をRにて実装する
+
+```{r}
+my.B.mut.Lie <- function(Q,lie = "algebra",k=1:length(Q[,1])){
+  if(lie == "algebra"){
+    P <- Q
+    R <- expm(P)
+  }else if (lie == "group"){
+    R <- Q
+    P <- my.tan.Rot(R)
+  }
+  mP <- Pi <- diffPi <- mR <- Rho <- diffRho <- list()
+  for(i in 1:length(k)){
+    mP[[i]] <- my.B.mut(P,k[i])
+    mR[[i]] <- expm(mP[[i]])
+    Rho[[i]] <- mR[[i]] %*% t(R)
+    Pi[[i]] <- my.tan.Rot(Rho[[i]])
+    diffPi[[i]] <- mP[[i]] - P
+    diffRho[[i]] <- expm(diffPi[[i]])
+  }
+  return(list(P=P,R=R,k=k,mP=mP,mR=mR,Pi=Pi,diffPi = diffPi,Rho=Rho,diffRho=diffRho))
+}
+```
+
+```{r}
+P <- matrix(c(0,1,1,-1,0,1,-1,-1,0),3,3)
+
+LieM <- my.B.mut.Lie(P)
+LieM
+```
+
+```{r}
+
+
+lapply(LieM$mR,function(x){(Arg(eigen(x)[[1]]))^2})
+lapply(LieM$mP,function(x){eigen(x)[[1]]^2})
+```
+```{r}
+lapply(LieM$Rho,function(x){Arg(eigen(x)[[1]])})
+```
+
+## Plucker
+
+```{r}
+my.pluck <- function(A,st=TRUE){
+  n <- length(A[1,])
+  k <- length(A[,1])
+  cmb <- combinations(n,k)
+  ret <- rep(0,length(cmb[,1]))
+  for(i in 1:length(cmb[,1])){
+    ret[i] <- det(A[,cmb[i,]])
+  }
+  if(st){
+    nonzero <- which(ret!=0)
+    ret <- ret/ret[nonzero[1]]
+  }
+  return(ret)
+}
+
+```
+
+```{r}
+X <- matrix(1:6,2,3)
+X
+my.pluck(X)
+```
+
+## 団変異による交換行列座標に関するPlucker 座標
+```{r}
+my.mutation.pluck <- function(P){
+  LieM <- my.B.mut.Lie(P)
+  n <- length(LieM$P[1,])
+  X <- matrix(0,n,n*(n-1)/2)
+  X0 <- P[which(upper.tri(P))]
+  for(i in 1:n){
+    X[i,] <- LieM$mP[[i]][which(upper.tri(LieM$mP[[i]]))]-X0
+  }
+  pl <- my.pluck(X)
+  return(pl)
+}
+```
+```{r}
+d <- 4
+P <- matrix(sample((-3):3,d^2,replace=TRUE),d,d)
+P <- P - t(P)
+my.mutation.pluck(P)^2
+LieM <- my.B.mut.Lie(P)
+my.mutation.pluck(LieM$mP[[1]])^2
+```
+
+```{r}
+d <- 4
+P <- matrix(sample((-1):1,d^2,replace=TRUE),d,d)
+P <- P - t(P)
+P <- sign(P)
+LieM <- my.B.mut.Lie(P)
+
+lapply(LieM$mR,function(x){(Arg(eigen(x)[[1]]))^2})
+lapply(LieM$mP,function(x){eigen(x)[[1]]^2})
+```
+```{r}
+LieM <- my.B.mut.Lie(P)
+n <- length(LieM$P[1,])
+X <- matrix(0,n,n*(n-1)/2)
+for(i in 1:n){
+  X[i,] <- LieM$mP[[i]][which(upper.tri(LieM$mP[[i]]))]
+}
+my.pluck(X)
+```
+
+## Lie代数の格子をLie群に写像する
+
+```{r}
+library(rgl)
+library(expm)
+
+#x <- y <- z <- seq(from=0,to=1,length=100)
+x <- 0
+y <- z <- seq(from=0,to=1,length=20) * 2 * pi
+xyz <- as.matrix(expand.grid(x,y,z))
+
+v <- rnorm(3)
+v <- c(1,1,1)
+v <- c(0,0,1)
+A <- matrix(0,length(xyz[,1]),3)
+
+for(i in 1:length(xyz[,1])){
+	P <- matrix(0,3,3)
+	P[which(upper.tri(P))] <- xyz[i,]
+	P <- P - t(P)
+	R <- expm(P)
+	A[i,] <- c(R %*% matrix(v,ncol=1))
+}
+
+plot3d(A)
+
+xyz2 <- as.matrix(expand.grid(x,x,z))
+B <- matrix(0,length(xyz2[,1]),3)
+
+for(i in 1:length(xyz2[,1])){
+	P <- matrix(0,3,3)
+	P[which(upper.tri(P))] <- xyz2[i,]
+	P <- P - t(P)
+	R <- expm(P)
+	B[i,] <- c(R %*% matrix(v,ncol=1))
+}
+
+spheres3d(B,radius=0.07,color=2)
+
+spheres3d(v,radius=0.14,color=3)
+```
+
+## 団変異の酔歩
+
+```{r}
+d <- 5
+P <- matrix(sample((-3):3,d^2,replace=TRUE),d,d)*0.01
+#P <- matrix(sample(0:1,d^2,replace=TRUE),d,d)
+P <- P - t(P)
+
+#P <- matrix(c(0,2,1,-2,0,1,-1,-1,0),3,3)
+Tetra <- matrix(c(0,1,0,0,1,0,0,0,1,0,0,1,1,0,0,1,0,0,0,1,0,0,1,0,0,0,1,0,0,1,1,0,0,1,0,0),byrow=TRUE,6,6)
+
+Tetra <- Tetra - t(Tetra)
+#d <- 6
+#P <- Tetra
+n <- 10000
+ks <- sample(1:d,n,replace=TRUE)
+ks <- rep(1:d,100)
+n <- length(ks)
+S <- list()
+S[[1]] <- my.B.mut.Lie(P,k=ks[1])
+for(i in 2:(n)){
+  tmpP <- S[[i-1]]$mP[[1]]
+  #print(tmpP)
+  S[[i]] <- my.B.mut.Lie(tmpP,k=ks[i-1])
+
+}
+```
+
+```{r}
+X <- matrix(0,length(S),d*(d-1)/2)
+Y <- X
+for(i in 1:length(S)){
+  X[i,] <- S[[i]]$P[which(upper.tri(S[[i]]$P))]
+  Y[i,] <- S[[i]]$R[which(upper.tri(S[[i]]$P))]
+}
+library(rgl)
+plot3d(X,type="l")
+#plot3d(Y,type="l")
+```
+```{r}
+plot3d(Y,type="l")
+```
+```{r}
+matplot(X,type="l")
+matplot(Y,type="l")
+```
+```{r}
+unique.X <- unique(X)
+D.man <- as.matrix(dist(unique.X,method="manhattan"))
+heatmap(D.man)
+```
+```{r}
+table(D.man)
+hist(D.man)
+```
+```{r}
+X2 <- matrix(0,length(S),d*(d-1)/2)
+for(i in 1:length(S)){
+  X2[i,] <- S[[i]]$mP[[1]][which(upper.tri(S[[i]]$mP[[1]]))]
+}
+library(rgl)
+plot3d(X2,type="l")
+```
+
+```{r}
+
+d <- 6
+P <- S[[3]]$mP[[1]]
+n <- 1000
+ks <- sample(1:d,n,replace=TRUE)
+S <- list()
+S[[1]] <- my.B.mut.Lie(P,k=ks[1])
+for(i in 2:(n)){
+  tmpP <- S[[i-1]]$mP[[1]]
+  S[[i]] <- my.B.mut.Lie(tmpP,k=ks[i-1])
+
+}
+```
+```{r}
+X <- matrix(0,length(S),d*(d-1)/2)
+Y <- X
+for(i in 1:length(S)){
+  X[i,] <- S[[i]]$P[which(upper.tri(S[[i]]$P))]
+  Y[i,] <- S[[i]]$R[which(upper.tri(S[[i]]$P))]
+}
+library(rgl)
+plot3d(X,type="l")
+#plot3d(Y,type="l")
+```
+
+## 回転行列の固有値と対応するSkew-Symmetric matrixの固有値
+
+回転行列の固有値は、ノルムが1の共役複素数ペア（に1を追加したもの。
+
+それに対して、Skew-Symmetric matrixの固有値は、共役な純虚数ペア（に0を追加したもの)。
+
+Skew-Symmetric matrixの固有値の虚部の値は、回転行列の固有値の位相に一致する。
+
+
+次元が偶数の場合
+```{r}
+d <- 4
+
+R <- Random.Start(d)
+if(det(R) < 0) R[,1] <- - R[,1]
+
+er <- eigen(R)[[1]]
+
+P <- logm(R)
+ep <- eigen(P)[[1]]
+
+er
+ep
+
+range(sort(Arg(er)) - sort(Im(ep)))
+
+```
+
+次元が奇数の場合
+```{r}
+d <- 5
+
+R <- Random.Start(d)
+if(det(R) < 0) R[,1] <- - R[,1]
+
+er <- eigen(R)[[1]]
+
+P <- logm(R)
+ep <- eigen(P)[[1]]
+
+er
+ep
+
+range(sort(Arg(er)) - sort(Im(ep)))
+
+```
+
+## 特定の角度に相当する回転行列
+
+```{r}
+
+my.angle.Rot <- function(R){
+  d <- length(R[1,])
+  x <- rnorm(d)
+  Rx <- R %*% matrix(x,ncol=1)
+  costheta <- sum(x * Rx)/sqrt(sum(x^2) * sum(Rx^2))
+  theta <- acos(costheta)
+  return(list(cos=costheta,theta=theta))
+}
+my.angle.adjust <- function(R,theta){
+  theta0 <- my.angle.Rot(R)[[2]]
+  k <- theta/theta0
+  eigen.out <- eigen(R)
+  ret <- eigen.out[[2]] %*% diag(eigen.out[[1]]*k) %*% solve(eigen.out[[2]])
+  return(ret)
+}
+```
+
+```{r}
+d <- 3
+R <- Random.Start(d)
+a <- 1.5
+b <- 1
+theta <- pi *a /b
+theta <- my.angle.Rot(R)[[2]]
+R.adj <- my.angle.adjust(R,theta)
+my.angle.Rot(R.adj)[[2]]/pi
+```
+## 回転行列のd通りの変異
+
+
+```{r}
+d <- 3
+P <- Random.Start(d)
+Q <- my.tan.Rot(P)
+new.Ps <- list()
+for(i in 1:d){
+  new.Q <- my.B.mut(Q,i)
+  new.Ps[[i]] <- expm(new.Q)
+}
+
+```
+
+```{r}
+P.angle <- my.angle.Rot(P)
+
+costhetas <- thetas <- rep(0,d)
+costhetas.diff <- thetas.diff <- rep(0,d)
+for(i in 1:length(new.Ps)){
+  tmp <- my.angle.Rot(new.Ps[[i]])
+  costhetas[i] <- tmp[[1]]
+  thetas[i] <- tmp[[2]]
+  tmpR <- new.Ps[[i]] %*% t(P)
+  tmp <- my.angle.Rot(tmpR)
+  costhetas.diff[i] <- tmp[[1]]
+  thetas.diff[i] <- tmp[[2]]
+}
+P.angle
+costhetas
+thetas
+costhetas.diff
+thetas.diff
+```
+## 有限な団代数
+
+```{r}
+d <- 3
+a <- 1
+b <- 4
+theta <- pi * a / b
+R0 <- matrix(c(cos(theta),-sin(theta),sin(theta),cos(theta)),byrow=TRUE,2,2)
+
+R <- diag(rep(1,d))
+R[1:2,1:2] <- R0
+
+P <- my.tan.Rot(R)
+
+#P <- matrix(rnorm(d^2),d,d)
+#P <- P - t(P)
+# Skew-Symmetric
+#P
+#tmp <- runif(d)
+tmp <- rep(1,d)
+A <- diag(tmp)
+#A
+A.inv <- diag(1/tmp)
+# Skew-Symmetrizable
+Q <- A %*% P
+#Q
+k <- sample(1:d,20,replace=TRUE)
+Ps <- Qs <- Rs <- list()
+Ps[[1]] <- P
+Qs[[1]] <- Q
+Rs[[1]] <- expm(P)
+for(i in 1:length(k)){
+  Qs[[i+1]] <- my.B.mut(Qs[[i]],k[i])
+  Ps[[i+1]] <- A.inv %*% Qs[[i+1]]
+  Rs[[i+1]] <- expm(Ps[[i+1]])
+}
+```
