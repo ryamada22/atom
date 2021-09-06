@@ -1,0 +1,430 @@
+---
+title: "Selective Inference of OR-ci in Multiple Testing Context"
+author: "ryamada"
+date: "2021年7月15日"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+## $2 \times 2$ 表の独立性の検定とOR-confidence intervalのSelective Inference
+
+真のオッズ比を知りたいときに、真のオッズ比がいくつになるか、まったく無情報だと考える。
+
+このとき、$\log{OR}$を観測$2\times 2$表から推定し、その信頼区間を定める方法の１つにWald法と呼ばれるものがある。
+
+```{r}
+library(epitools)
+tab <- matrix(c(100,110,120,140),2,2)
+oddsratio.wald(tab)
+```
+
+この手法では、
+
+OR比の点推定値 $\hat{OR} = \frac{n_{11}\times n_{22}}{n_{12}\times n_{21}}$とし、
+
+$$
+\log{OR} \sim N(\mu, sd),\\
+\mu = \hat{OR}\\
+sd = \sqrt{\frac{1}{n_{11}} + \frac{1}{n_{12}} + \frac{1}{n_{21}} + \frac{1}{n_{22}}}
+$$
+
+と見立て、そのクオンタイル値にて、信頼区間を定める方法である。
+
+Rのepitools パッケージにて計算した結果と、定義に沿った計算とでこれを比較してみる。
+
+```{r}
+hat.or <- tab[1,1]*tab[2,2] / (tab[1,2] * tab[2,1])
+log.hat.or <- log(hat.or)
+SE.log.or <- sqrt(sum(1/tab))
+
+ci <- 0.95
+L.ci <- exp(qnorm((1-ci)/2,log.hat.or,SE.log.or))
+U.ci <- exp(qnorm(1- (1-ci)/2,log.hat.or,SE.log.or))
+```
+
+```{r}
+hat.or
+L.ci
+U.ci
+oddsratio.wald(tab,conf.level=ci)$measure
+```
+
+検算終了。
+
+## 単純に $2 \times 2 $ 表の独立性検定と、その帰無仮説棄却亜群におけるSelective OR-ci inferenceとに「面白みがないこと」の確認
+
+真のORが1に近いとき、点推定ORはばらつくが、十分に小さいp値を取ることは稀である。Selectionされる確率は稀になる。
+
+それに対してORが1から十分に通りときも、点推定ORは、ばらつくが、ほぼ100 % の確率で十分に小さいp値を取り、Selectionされる確率は1に近い。
+
+今、ある観察表からp値を計算したときに、かろうじて、帰無仮説が棄却されたとする。
+
+このとき、真のORは点推定ORに近い可能性は高いが、真のORが1に近い可能性も少なからず存在する。
+また、点推定ORよりもはるかに大きい値が真の
+OR値である可能性も存在する。
+
+計算機シミュレーションをして、信頼区間内に真のORが入る確率を確認するためには、ありとあらゆるOR値を真の値として想定し、その上で、p値によって棄却亜群を決定し、その棄却された表について、真のORがその表から算出したOR-ci内に入る確率がciレベル相当であるかを検討することになる。
+
+### やってみる
+
+```{r}
+n.trial <- 100000
+
+true.ors <- runif(n.trial,min=1/5,max=5)
+
+p.values <- ests <- rep(0,n.trial)
+ci <- matrix(0,n.trial,2)
+
+alpha <- 0.05
+beta <- 0.95
+conf.levels <- c((1-beta)/2,1-(1-beta)/2)
+
+N <- 1000
+pop.frac <- 0.5
+
+for(i in 1:n.trial){
+	true.or <- true.ors[i]
+	q <- sqrt(true.or)/(1+sqrt(true.or))
+	ps <- c(q*pop.frac,(1-q)*pop.frac,(1-q)*(1-pop.frac),q*(1-pop.frac))
+	data <- rmultinom(1,N,ps)
+	tmp.table <- matrix(data,2,2)
+	chi.out <- chisq.test(tmp.table,correct=FALSE)
+	p.values[i] <- chi.out$p.value
+
+	# Conventional point estimate of OR
+	est <- tmp.table[1,1]*tmp.table[2,2]/(tmp.table[1,2]*tmp.table[2,1])
+	# The random variation of log(OR) is assumed in gaussian distribution with mean = log(est) and sd = sqrt(sum(1/tmp.table))... Wald-method
+	logOR <- log(est)
+	SElogOR <- sqrt(sum(1/tmp.table))
+
+	tmp.zs <- exp(qnorm(conf.levels,logOR,SElogOR))
+	ci[i,] <- tmp.zs
+	ests[i] <- est
+}
+
+
+
+
+ord <- order(ests)
+ests <- ests[ord]
+p.values <- p.values[ord]
+ci <- ci[ord,]
+
+selected <- which(p.values < alpha)
+
+in.out <- (ci[,1] - true.ors[ord]) * (ci[,2] - true.ors[ord]) 
+
+
+in.out.sign <- -(sign(in.out) -1)/2
+
+length(which(in.out < 0)) / n.trial
+
+length(which(in.out[selected] < 0)) / length(selected)
+```
+
+全テーブルでもSelectedテーブルでも、信頼区間内に納まる確率は、変わらないことが判る。
+
+念のため、ORの点推定値別に、「納まる確率」を計算してみて、以下に示す。
+
+結果として、OR点推定値の多寡によらず、「納まる確率」は適当な値を取ることが判る。
+
+```{r}
+
+plot(log(ests),in.out.sign,xlab="log(OR点推定値)",ylab="in or out of ci",main="all tables")
+
+```
+
+Selected tablesでは、OR点推定値の対数が0付近が抜けているのが判る。
+
+```{r}
+plot(log(ests[selected]),in.out.sign[selected],xlab="log(OR点推定値)",ylab="in or out of ci",main="selected tables")
+```
+
+
+```{r}
+breaks <- seq(from= min(log(ests)),to=max(log(ests)),length=20)
+in.out.breaks <- matrix(0,length(breaks)-1,2)
+frac.in.breaks <- rep(0,length(breaks)-1)
+
+for(i in 1:(length(breaks)-1)){
+  tmp <- which(log(ests)>= breaks[i] & log(ests) < breaks[i+1])
+  tmp2 <- in.out.sign[tmp]
+  in.out.breaks[i,] <- c(sum(tmp2),length(tmp2))
+  frac.in.breaks[i] <- sum(tmp2) / length(tmp2)
+}
+
+plot(breaks[-1],frac.in.breaks,type="l",main="all tables\n fration of in per log(ests)")
+abline(h=beta,col=2)
+```
+
+真のORが小さい側と大きい側の両極端では信頼区間内に真値が入る確率が下がっているが、
+これは、実験上のバイアスと考えられる。
+
+極端に小さな推定OR値は、シミュレーションで設定した真のOR値よりも小さいか大きいかのどちらかにずれているものたちからなっており、必然的に、信頼区間外となる率が上がっている為である。
+
+同様に、Selected亜群で同じことを行う。
+
+```{r}
+
+in.out.breaks.selected <- matrix(0,length(breaks)-1,2)
+frac.in.breaks.selected <- rep(0,length(breaks)-1)
+
+ests.selected <- ests[selected]
+in.out.sign.selected <- in.out.sign[selected]
+
+for(i in 1:(length(breaks)-1)){
+  tmp <- which(log(ests.selected)>= breaks[i] & log(ests.selected) < breaks[i+1])
+  tmp2 <- in.out.sign.selected[tmp]
+  in.out.breaks.selected[i,] <- c(sum(tmp2),length(tmp2))
+  frac.in.breaks.selected[i] <- sum(tmp2) / length(tmp2)
+}
+
+plot(breaks[-1],frac.in.breaks.selected,type="l",main="selected tables\n fration of in per log(ests)")
+abline(h=beta,col=2)
+```
+
+グラフを重ねる。
+
+全テーブルとSelectedテーブルとで違いがないことが判る。
+```{r}
+plot(breaks[-1],frac.in.breaks,type="l",main="fration of in per log(ests)")
+points(breaks[-1],frac.in.breaks.selected,type="l",col=3)
+abline(h=beta,col=2)
+```
+
+## Selectionの影響がOR-ciに影響を与える文脈に話を移す
+
+真のORが大小いずれもあり得る状況では、Selection後のOR-ciの算出方法を変える必要がない。
+
+では、どのような状況でそれはあり得るのか。
+
+実際、多数の検定を行い、多数のOR点推定を行い、多数のOR-ciを計算する文脈～Multiple-testingを考える。
+
+## 実験の条件設定
+
+Multiple testingを行うと、その点推定ORはおおまかには、正規分布を取ることが多い。
+
+そこで、以下の実験では、真の$\log{OR}$が正規分布をとるものとし、その平均が0、標準偏差の大きさをパラメタとして変え、n.trial　通りの$\log{OR}$分布について実験をする。
+
+### 真のORの分布例
+
+サンプル数が1000-10000のとき、OR=2は非常に強いORとみなされる値に相当する。
+
+```{r}
+sds <- c(0.1,0.2,0.25,0.5)
+par(mfcol=c(2,2))
+for(i in 1:length(sds)){
+  true.ors <- exp(abs(rnorm(10^5,0,sds[i])))
+  hist(true.ors,main=paste("log(or) = ", sds[i]),xlab="log(or)")
+}
+```
+
+### Multiple testing 実験
+
+また、各実験では、n.multi個の真のORを持つ検定・推定対象をmultiple testingする事とする。
+
+その上で、パラメタライズした標準偏差ごとに、Wald法信頼区間に真のOR値が入る確率を測定する。
+
+なお、Selectionの方法としては、
+
+* Selectionしない
+* マルチプルテスティングを考慮せず、nominal p値で棄却する (p < 0.05など)
+* マルチプルテスティング補正法としてBonferonni補正を行う
+* マルチプルテスティング補正法としてFDR補正を行う
+
+の、４通りを採用し、それぞれについて、信頼区間内に入る確率を計算する。
+
+```{r}
+
+n.multi <- 1000 # マルチプルテスティングのテスト数
+n.trial <- 500 # 実験数。各回で真のORの分布のSDを変える
+
+frac.in <- matrix(0,n.trial,4) # 4つのSelection法ごとに、信頼区間内割合を記録する
+
+# 真のORの正規分布では、大きすぎるORが出ないように、選ぶ
+sds <- sort(runif(n.trial)) * 0.5
+
+# 検定条件と、信頼区間条件
+alpha <- 0.05
+beta <- 0.95
+conf.levels <- c((1-beta)/2,1-(1-beta)/2)
+# 各表の総サンプル数
+N <- 1000
+# 2群の比を決めるパラメタ。0.5は２群の割合が均等
+pop.frac <- 0.5	
+
+#log(or)点推定値binごとの「信頼区間内部割合」を格納する
+
+bin.factor <- 10
+
+n.bin <- bin.factor * 6
+
+min.bin <- (-1) * n.bin/2
+
+logor.breaks <- (0:(n.bin-1) + min.bin)/bin.factor
+
+# Selectionなしでの推定log(or)別の信頼区間内比率
+count.per.bin.1 <- matrix(0,n.trial,n.bin)
+count.per.bin.2 <- matrix(0,n.trial,n.bin)
+# Bonferroni 補正でのそれ
+
+count.per.bin.bonf.1 <- matrix(0,n.trial,n.bin)
+count.per.bin.bonf.2 <- matrix(0,n.trial,n.bin)
+# 各実験でループする
+for(ii in 1:n.trial){
+  # 指定したSDにて真のORを発生させる
+	#true.ors <- exp(abs(rnorm(n.multi,0,sds[ii])))
+	true.ors <- exp((rnorm(n.multi,0,sds[ii])))
+	# p値、信頼区間の格納オブジェクト
+	p.values <- ests <- rep(0,n.multi)
+	ci <- matrix(0,n.multi,2)
+
+	# マルチプルテスティングにて、個々の表を作り、検定と推定をする
+	for(i in 1:n.multi){
+	  # 真のOR
+		true.or <- true.ors[i]
+		# 真のORに基づく、母集団４グループ割合 ps の算出
+		q <- sqrt(true.or)/(1+sqrt(true.or))
+		ps <- c(q*pop.frac,(1-q)*pop.frac,(1-q)*(1-pop.frac),q*(1-pop.frac))
+		# 多項分布乱数にて、２ｘ２表のセルの値を生成
+		data <- rmultinom(1,N,ps)
+		# 2x2表
+		tmp.table <- matrix(data,2,2)
+		# カイ二乗検定。Yate's 補正はしない方が、分布の漸近性との相性がよいので
+		# correct オプションはFalse
+		chi.out <- chisq.test(tmp.table,correct=FALSE)
+		p.values[i] <- chi.out$p.value
+
+		# Wald 法によるOR推定
+		# Conventional point estimate of OR
+		est <- tmp.table[1,1]*tmp.table[2,2]/(tmp.table[1,2]*tmp.table[2,1])
+		# The random variation of log(OR) is assumed in gaussian distribution with mean = log(est) and sd = sqrt(sum(1/tmp.table))... Wald-method
+		logOR <- log(est)
+		SElogOR <- sqrt(sum(1/tmp.table))
+		#print(logOR)
+		#print(SElogOR)
+		tmp.zs <- exp(qnorm(conf.levels,logOR,SElogOR))
+		ci[i,] <- tmp.zs
+		ests[i] <- est
+		tmp <- round(log(est) * bin.factor,0) - min.bin
+		if(true.or > ci[i,1] & true.or < ci[i,2]){
+		  count.per.bin.1[ii,tmp] <- count.per.bin.1[ii,tmp]+1
+		  if(p.values[i] < (alpha/n.multi)){
+		    count.per.bin.bonf.1[ii,tmp] <- count.per.bin.bonf.1[ii,tmp]+1
+		  }
+		}
+		
+		count.per.bin.2[ii,tmp] <- count.per.bin.2[ii,tmp]+1
+		if(p.values[i] < (alpha/n.multi)){
+		    count.per.bin.bonf.2[ii,tmp] <- count.per.bin.bonf.2[ii,tmp]+1
+		  }
+
+	}
+	# マルチプルテスティングで得られた、p値列に対しFDR補正
+	q.values <- p.adjust(p.values) # FDR
+	
+	# 点推定OR比でソートする
+	ord <- order(ests)
+	ests <- ests[ord]
+	p.values <- p.values[ord]
+	q.values <- q.values[ord]
+	ci <- ci[ord,]
+	
+	# Selection亜群を取り出す
+	# Nomoinal p値が alpha 未満の場合
+	selected <- which(p.values < alpha)
+	# Bonferroni補正の場合
+	selected.bonf <- which(p.values < (alpha/n.multi))
+	# FDR補正の場合
+	selected.q <- which(q.values < alpha)
+
+	# 信頼区間に真ORが入っているかどうかの判定
+	in.out <- (ci[,1] - true.ors[ord]) * (ci[,2] - true.ors[ord]) 
+	# in.out.sign が1ならば「入っている」、0ならば「入っていない」
+	in.out.sign <- -(sign(in.out) -1)/2
+	
+	# 「入っている割合の計算
+	# Selectionなしの場合：第１列
+	frac.in[ii,1] <- length(which(in.out < 0)) / n.multi
+  # Nominal p < alpha の場合：第２列
+	frac.in[ii,2] <- length(which(in.out[selected] < 0)) / length(selected)
+	# Bonferroni 補正の場合：第３列
+	frac.in[ii,3] <- length(which(in.out[selected.bonf] < 0)) / length(selected.bonf)
+	# FDR補正の場合：第４列
+	frac.in[ii,4] <- length(which(in.out[selected.q] < 0)) / length(selected.q)
+	
+
+}
+```
+
+### 真のORを生成した正規分布のSDと信頼区間に入る割合の関係
+
+
+黒線は、Selectionナシ。
+
+SDによらず95%を返している。
+
+赤線は、nominal pをalpha=0.05で棄却したもの。
+
+SDが小さいときほど、信頼区間に入る割合が小さくなる。
+
+マルチプルテスティング補正を下緑（ボンフェロニ補正）と青（ＦＤＲ補正）とはほぼ同じであるが、nominal-p値でのSelectionよりも、さらに、信頼区間に入る割合が小さくなる。
+
+信頼区間に入る割合が小さいのは、SDが小さいときであり、逆にSDが大きいとき～とても大きな真のORがあり得る状況、真のORの分布が平坦に近くなると、十分棄却される割合が増えるためと思われるが、その理由から0.95に近くなる。
+
+```{r}
+# ４通りのSelectionsにて、区間内に入る割合が、真のOR分布を規定するSDとの関係をプロットする
+
+matplot(sds,frac.in,type="l",xlab="SD",main="Fraction_IN")
+```
+
+## 点推定 log(OR)ごとの信頼区間内割合の様子を調べる。
+
+### Selectionなしの場合
+
+点推定log(OR)ごとに、信頼区間に入る割合をプロットしてみる。
+
+色は、真のlog(OR)がのSDが小さいほど黒っぽく、SDが大きいほど白っぽくしている。
+
+推定log(OR)が1に近いときには、高確率(~0.95)で信頼区間内に入るが、外れるほど、区間内に入らないことがわかる。
+
+これらの総体として、SDによらず、信頼区間内に入る割合が安定するものと考えられる。
+
+```{r}
+matplot(logor.breaks,t(count.per.bin.1/count.per.bin.2),type="l",main="No_selection frac.in per log(est.or) bin",xlab="estmated log(or)",ylab="frac in ci",col=gray((1:500)/500))
+abline(h=0.95,col=2)
+```
+
+
+他方、ボンフェロニ補正で推定ORが強い場合のみをSelectionした場合には、log(OR)=1付近が消失する。
+
+その領域は、95%信頼区間内に、きちんと95%の確率で真値が入りがちな領域であるが、その部分が欠けることで、信頼区間内に入る割合が全体として減じるものと考えられる。
+
+
+```{r}
+matplot(logor.breaks,t(count.per.bin.bonf.1/count.per.bin.bonf.2),type="l",main="Bonferroni_Selection frac.in per log(est.or) bin",xlab="estmated log(or)",ylab="frac in ci",col=gray((1:500)/500))
+abline(h=0.95,col=2)
+```
+
+## 方向性
+
+* OR ~ 1付近では、信頼区間の挙動がよいこと
+* OR ~ 1から外れても、1付近を除かなければ、信頼区間の定義を満足する挙動を示すこと（少なくとも Wald法では）
+* 逆を言えば、OR ~ 1付近を除去すると、信頼区間に入る割合は下がり、その下がり具合は、点推定ORが1から外れるほど大きくなること
+* OR ~ 1付近の除去の程度が強くなるほど、信頼区間に入る割合は下がることから、nominal p 値での棄却よりも、マルチプルテスティング補正による、厳しいp値基準を採用する方が、信頼区間の不適切性が高くなること
+
+以上のことが、上記の簡易実験で観察された。
+
+目標は
+* この観察を、シミュレーション実験的に確固としたものにすること
+* 何かしら、うまく補正する方法を考案したい。
+* そのために利用できる情報は、「多数のアイテムについてOR (log(OR))の分布が得られるようなマルチプルテスティング」の観察データとなる
+
+### 本課題について、アドバイスできるメンバー
+
+柴田さん、岡田さん
+

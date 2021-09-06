@@ -54,7 +54,7 @@ Rootを背骨の下端に存在する、長さ0の架空の骨とする
 
 ## R
 ```{r}
-my_calculate_skeleton <- function(Skeleton.st,j.list,Js=rep(list(diag(rep(1,3))),length(j.list[,1]))){
+my_calculate_skeleton.ori <- function(Skeleton.st,j.list,Js=rep(list(diag(rep(1,3))),length(j.list[,1]))){
   for(i in 1:length(j.list[,1])){
     v1 <- j.list[i,1]
     v2 <- j.list[i,2]
@@ -77,7 +77,32 @@ my_calculate_skeleton <- function(Skeleton.st,j.list,Js=rep(list(diag(rep(1,3)))
   return(Skeleton.st)
 }
 ```
-
+```{r}
+my_calculate_skeleton <- function(Skeleton.st,j.list,Js=rep(list(diag(rep(1,3))),length(j.list[,1]))){
+  for(i in 1:length(j.list[,1])){
+    print(i)
+    v1 <- j.list[i,1]
+    v2 <- j.list[i,2]
+    tmp <- sapply(Skeleton.st[[v1]]$Js,function(x){return(x$E)})
+    tmp2 <- which(tmp==v2)
+    tmp3 <- Skeleton.st[[v1]]$Js[[tmp2]]
+    tmp4 <- tmp3$v
+    x1 <- Skeleton.st[[v1]]$xs[tmp4,] 
+    B <- Skeleton.st[[v1]]$B
+    
+    tmp.Base <- my.rot2(B,tmp3$JRot)
+    #tmp.Base <- my.rot(B,tmp3$psi,tmp3$theta)
+    #tmp.Base <- my.rot(tmp.Base,Js[i,1],Js[i,2])
+    tmp.Base <- my.rot2(tmp.Base,Js[[i]])
+    Skeleton.st[[v2]]$B <- tmp.Base
+    
+    x2 <- x1 + Skeleton.st[[v2]]$B[,3] * Skeleton.st[[v2]]$L
+    
+    Skeleton.st[[v2]]$xs <- rbind(x1,x2)
+  }
+  return(Skeleton.st)
+}
+```
 ```{r}
 my.rot <- function(B,psi,theta){
   tmp <- diag(rep(1,3))
@@ -96,7 +121,7 @@ my.rot2 <- function(B,R){
 ```
 
 ```{r}
-my.rotMat <- function(jid,a1,a2,theta){
+my.rotMat <- function(a1,a2,theta){
   ret <- diag(rep(1,3))
   ret[a1,a1] <- cos(theta)
   ret[a2,a2] <- cos(theta)
@@ -121,14 +146,16 @@ my.plot_skeleton <- function(skl,RacketFace,rad=3,color=3,racket.color=2,alpha=0
       
       vb <- tmp.ellipse$vb
       normals <- tmp.ellipse$normals
-      
+      vb.x <- vb[1,]
+      col <- rep(racket.color,length(vb.x))
+      col[which(vb.x < 0)] <- racket.color + 1
       new.vb <- B %*% vb[1:3,]
       new.normals <- B %*% normals[1:3,]
       
       tmp.ellipse$vb[1:3,] <- new.vb + face.ctr
       tmp.ellipse$normals[1:3,] <- new.normals + face.ctr
       
-      plot3d( tmp.ellipse, col = racket.color, alpha = alpha, add = TRUE)
+      plot3d( tmp.ellipse, col = col, alpha = alpha, add = TRUE)
 
     }else{
       xs <- skl[[i]]$xs
@@ -147,6 +174,9 @@ my.plot_skeleton <- function(skl,RacketFace,rad=3,color=3,racket.color=2,alpha=0
         tmp1 <- xs[1,] + rad*B[,1]
         tmp2 <- xs[2,] + rad*B[,1]
         segments3d(rbind(tmp1,tmp2),lwd = lwd)
+        tmp1 <- xs[1,] + rad*B[,2]
+        tmp2 <- xs[2,] + rad*B[,2]
+        segments3d(rbind(tmp1,tmp2),lwd = lwd,color=2)
       }
     
       }
@@ -168,53 +198,54 @@ library(igraph)
 
 Base.st <- diag(rep(1,3))
 
-Root <- list(ID=1,xs = rbind(c(0,0,0),c(0,0,0)), B=Base.st,L=0,nJ=2,Js=list(J1=list(psi=0,theta=0,v=1,E=19),J2=list(psi=pi,theta=pi,v=2,E=3)))
+Root <- list(ID=1,xs = rbind(c(0,0,0),c(0,0,0)), B=Base.st,L=0,nJ=2,Js=list(J1=list(JRot=Base.st,psi=0,theta=0,v=1,E=19),J2=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=2,E=3)))
 
-SpineL <- list(ID=19,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=1),J2=list(psi=0,theta=0,v=2,E=2)))
+SpineL <- list(ID=19,L=30,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=1),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=2)))
 
-SpineT <- list(ID=2,L=30,nJ=3,Js=list(J1=list(psi=pi,theta=pi,v=1,E=19),J2=list(psi=-pi/2,theta=0,v=2,E=4),J3=list(psi=pi/2,theta=0,v=2,E=5)))
+SpineT <- list(ID=2,L=30,nJ=3,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=19),J2=list(JRot=my.rotMat(1,3,-pi/2),psi=-pi/2,theta=0,v=2,E=4),J3=list(JRot=my.rotMat(1,3,pi/2),psi=pi/2,theta=0,v=2,E=5)))
 
-Pelvis <- list(ID=3,L=10,nJ=3,Js=list(J1=list(psi=pi,theta=pi,v=1,E=1),J2=list(psi=pi/2,theta=0,v=2,E=6),J3=list(psi=-pi/2,theta=0,v=2,E=7)))
+Pelvis <- list(ID=3,L=10,nJ=3,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=1),J2=list(JRot=my.rotMat(1,3,-pi/2),psi=pi/2,theta=0,v=2,E=6),J3=list(JRot=my.rotMat(1,3,pi/2),psi=-pi/2,theta=0,v=2,E=7)))
 
-Pelvis2R <- list(ID=6,L=10,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=3),J2=list(psi=pi/2,theta=pi,v=2,E=8)))
+Pelvis2R <- list(ID=6,L=10,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=3),J2=list(JRot=my.rotMat(1,3,pi/2),psi=pi/2,theta=pi,v=2,E=8)))
 
-Pelvis2L <- list(ID=7,L=10,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=3),J2=list(psi=-pi/2,theta=pi,v=2,E=9)))
+Pelvis2L <- list(ID=7,L=10,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=3),J2=list(JRot=my.rotMat(1,3,-pi/2),psi=-pi/2,theta=pi,v=2,E=9)))
 
-FemurR <- list(ID=8,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=6),J2=list(psi=0,theta=0,v=2,E=10)))
+FemurR <- list(ID=8,L=35,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=6),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=10)))
 
-FemurL <- list(ID=9,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=7),J2=list(psi=0,theta=0,v=2,E=11)))
+FemurL <- list(ID=9,L=35,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=7),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=11)))
 
-TibiaR <- list(ID=10,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=8),J2=list(psi=pi/2,theta=-pi/2,v=2,E=21)))
+TibiaR <- list(ID=10,L=35,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=8),J2=list(JRot=my.rotMat(2,3,pi/2),psi=pi/2,theta=-pi/2,v=2,E=21)))
 
-TibiaL <- list(ID=11,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=9),J2=list(psi=pi/2,theta=-pi/2,v=2,E=22)))
+TibiaL <- list(ID=11,L=35,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=9),J2=list(JRot=my.rotMat(2,3,pi/2),psi=pi/2,theta=-pi/2,v=2,E=22)))
 
-ClavicleR <- list(ID=4,L=20,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=2),J2=list(psi=pi/2,theta=pi,v=2,E=12)))
+#ClavicleR <- list(ID=4,L=20,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=2),J2=list(psi=pi/2,theta=pi,v=2,E=12)))
+ClavicleR <- list(ID=4,L=20,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=2),J2=list(JRot=my.rotMat(1,3,-pi/2),psi=-pi/2,theta=0,v=2,E=12)))
 
-ClavicleL <- list(ID=5,L=20,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=2),J2=list(psi=-pi/2,theta=pi,v=2,E=13)))
+ClavicleL <- list(ID=5,L=20,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=2),J2=list(JRot=my.rotMat(1,3,pi/2),psi=-pi/2,theta=pi,v=2,E=13)))
 
-HumerusR <- list(ID=12,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=4),J2=list(psi=0,theta=0,v=2,E=14)))
+HumerusR <- list(ID=12,L=30,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=4),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=14)))
 
-HumerusL <- list(ID=13,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=5),J2=list(psi=0,theta=0,v=2,E=15)))
+HumerusL <- list(ID=13,L=30,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=5),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=15)))
 
 #UlnaR <- list(ID=14,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=12),J2=list(psi=pi/2,theta=pi/2,v=2,E=16)))
 
 #UlnaL <- list(ID=15,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=13),J2=list(psi=pi/2,theta=pi/2,v=2,E=17)))
 
-UlnaR <- list(ID=14,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=12),J2=list(psi=0,theta=0,v=2,E=16)))
+UlnaR <- list(ID=14,L=30,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=12),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=16)))
 
-UlnaL <- list(ID=15,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=13),J2=list(psi=0,theta=0,v=2,E=17)))
+UlnaL <- list(ID=15,L=30,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=13),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=17)))
 
-HandR <- list(ID=16,L=10,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=14),J2=list(psi=pi/2,theta=pi/2,v=2,E=18)))
+HandR <- list(ID=16,L=10,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=14),J2=list(JRot=my.rotMat(2,3,-pi/2),psi=pi/2,theta=pi/2,v=2,E=18)))
 
-HandL <- list(ID=17,L=10,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=15),J2=list(psi=0,theta=0,v=2,E=NULL)))
+HandL <- list(ID=17,L=10,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=15),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=NULL)))
 
-RacketShuftR <-  list(ID=18,L=40,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=16),J2=list(psi=0,theta=0,v=2,E=20)))
+RacketShuftR <- list(ID=18,L=40,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=16),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=20)))
 
-RacketFaceR <-  list(ID=20,L=20,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=18),J2=list(psi=0,theta=0,v=2,E=NULL)))
+RacketFaceR <-  list(ID=20,L=20,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=18),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=NULL)))
 
-FootR <- list(ID=21,L=25,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=10),J2=list(psi=0,theta=0,v=2,E=NULL)))
+FootR <- list(ID=21,L=25,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=10),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=NULL)))
 
-FootL <- list(ID=22,L=25,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=11),J2=list(psi=0,theta=0,v=2,E=NULL)))
+FootL <- list(ID=22,L=25,nJ=2,Js=list(J1=list(JRot=my.rotMat(2,3,pi),psi=pi,theta=pi,v=1,E=11),J2=list(JRot=Base.st,psi=0,theta=0,v=2,E=NULL)))
 
 Skeleton.st <- list(S1=Root,S2=SpineT,S3=Pelvis,S4=ClavicleR,S5=ClavicleL,S6=Pelvis2R,S7=Pelvis2L,S8=FemurR,S9=FemurL,S10=TibiaR,S11=TibiaL,S12=HumerusR,S13=HumerusL,S14=UlnaR,S15=UlnaL,S16=HandR,S17=HandL,S18=RacketShuftR,S19=SpineL,S20=RacketFaceR,S21=FootR,S22=FootL)
 
@@ -250,7 +281,7 @@ jid <- 3
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -263,7 +294,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -276,7 +307,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -307,7 +338,7 @@ jid <- 6
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -323,7 +354,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -341,7 +372,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -367,7 +398,7 @@ jid <- 7
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -384,7 +415,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -404,7 +435,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -430,7 +461,7 @@ jid <- 8
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -448,7 +479,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -466,7 +497,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -492,7 +523,7 @@ jid <- 9
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -512,7 +543,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -530,7 +561,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -556,7 +587,7 @@ jid <- 10
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -574,7 +605,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -593,7 +624,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -619,7 +650,7 @@ jid <- 12
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -637,7 +668,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -656,7 +687,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -682,7 +713,7 @@ jid <- 14
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -700,7 +731,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -719,7 +750,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -747,7 +778,7 @@ jid <- 16
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -765,7 +796,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -784,7 +815,7 @@ my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 theta <- pi/6
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -815,7 +846,7 @@ jid <- 18
 theta <- pi/2
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -836,19 +867,19 @@ jid <- 14
 theta <- pi/2
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 jid <- 18
 theta <- pi/2
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 jid <- 16
 theta <- pi/2
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
 my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
@@ -867,12 +898,12 @@ jid <- 6
 theta <- -pi/2
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 jid <- 7
 theta <- -pi/2
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -889,24 +920,24 @@ jid <- 3
 theta <- pi/9
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 jid <- 2
 theta <- -pi/4
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 jid <- 6
 theta <- -pi/4
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 jid <- 7
 theta <- -pi/4
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
@@ -924,48 +955,48 @@ jid <- 3
 theta <- pi/100
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 # 股関節
 jid <- 6
 theta <- -pi/2 
 a1 <- 2
 a2 <- 3
-tmpR1 <- my.rotMat(jid,a1,a2,theta)
+tmpR1 <- my.rotMat(a1,a2,theta)
 theta2 <- -pi/4
 a1 <- 1
 a2 <- 2
-tmpR2 <- my.rotMat(jid,a1,a2,theta2)
+tmpR2 <- my.rotMat(a1,a2,theta)
 Js[[jid]] <- tmpR2 %*% tmpR1
 jid <- 7
 theta <- -pi/2 
 a1 <- 2
 a2 <- 3
-tmpR1 <- my.rotMat(jid,a1,a2,theta)
+tmpR1 <- my.rotMat(a1,a2,theta)
 theta2 <- pi/4
 a1 <- 1
 a2 <- 2
-tmpR2 <- my.rotMat(jid,a1,a2,theta2)
+tmpR2 <- my.rotMat(a1,a2,theta)
 Js[[jid]] <- tmpR2 %*% tmpR1
 jid <- 8
 theta <- pi/2
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 jid <- 9
 theta <- pi/2
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 jid <- 20
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 jid <- 21
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 # ウェスタングリップにしてバッグで構える
 # 蠅叩き式に
@@ -974,26 +1005,26 @@ jid <- 12
 theta <- pi/6 
 a1 <- 2
 a2 <- 3
-tmpR1 <- my.rotMat(jid,a1,a2,theta)
+tmpR1 <- my.rotMat(a1,a2,theta)
 theta2 <- -pi/6
 a1 <- 1
 a2 <- 3
-tmpR2 <- my.rotMat(jid,a1,a2,theta2)
+tmpR2 <- my.rotMat(a1,a2,theta)
 Js[[jid]] <- tmpR2 %*% tmpR1
 #theta <- pi/3
 #a1 <- 2
 #a2 <- 3
-#Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+#Js[[jid]] <- my.rotMat(a1,a2,theta)
 # 肘
 jid <- 14
 theta <- pi/4
 a1 <- 2
 a2 <- 3
-tmpR1 <- my.rotMat(jid,a1,a2,theta)
+tmpR1 <- my.rotMat(a1,a2,theta)
 theta2 <- -pi/4
 a1 <- 1
 a2 <- 2
-tmpR2 <- my.rotMat(jid,a1,a2,theta2)
+tmpR2 <- my.rotMat(a1,a2,theta)
 
 Js[[jid]] <- tmpR2 %*% tmpR1
 
@@ -1003,14 +1034,14 @@ theta <- pi/2 # イースタングリップ
 #theta <- 0 # ウェスタングリップ
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 
 # 手関節を尺側に少しまげて、ラケットを前倒しにする
 jid <- 16
 theta <- -pi/10
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 #Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
 
@@ -1030,27 +1061,27 @@ jid <- 3
 theta <- -pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 jid <- 6
 theta <- -pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 jid <- 7
 theta <- -pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 jid <- 7
 theta <- pi/3
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 jid <- 8
 theta <- pi/3
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Js[[jid]] <- my.rotMat(a1,a2,theta)
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
 my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
