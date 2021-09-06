@@ -94,14 +94,25 @@ my.rot2 <- function(B,R){
   return(B %*% R)
 }
 ```
+
 ```{r}
-my.plot_skeleton <- function(skl,RacketFace,rad=1,color=4,lwd = 5){
+my.rotMat <- function(jid,a1,a2,theta){
+  ret <- diag(rep(1,3))
+  ret[a1,a1] <- cos(theta)
+  ret[a2,a2] <- cos(theta)
+  ret[a1,a2] <- -sin(theta)
+  ret[a2,a1] <- sin(theta)
+  return(ret)
+}
+```
+```{r}
+my.plot_skeleton <- function(skl,RacketFace,rad=3,color=3,racket.color=2,alpha=0.5,lwd = 5,maxMesh=15){
   open3d()
   for(i in 1:length(skl)){
     if(i==RacketFace){
       xs <- skl[[i]]$xs
       L <- skl[[i]]$L
-      t <- seq(from=0,to=1,length=max(20,L))*2*pi
+      t <- seq(from=0,to=1,length=max(maxMesh,L))*2*pi
       face.rad <- L/2
       face.ctr <- apply(xs,2,mean)
       B <- skl[[i]]$B
@@ -117,13 +128,13 @@ my.plot_skeleton <- function(skl,RacketFace,rad=1,color=4,lwd = 5){
       tmp.ellipse$vb[1:3,] <- new.vb + face.ctr
       tmp.ellipse$normals[1:3,] <- new.normals + face.ctr
       
-      plot3d( tmp.ellipse, col = "green", alpha = 0.5, add = TRUE)
+      plot3d( tmp.ellipse, col = racket.color, alpha = alpha, add = TRUE)
 
     }else{
       xs <- skl[[i]]$xs
       L <- skl[[i]]$L
       if(sum((xs[1,]-xs[2,])^2)>0){
-        t <- seq(from=0,to=1,length=max(20,L))
+        t <- seq(from=0,to=1,length=max(maxMesh,L))
         t <- t[-1]
         t <- t[-length(t)]
       if(length(xs[,1])>1){
@@ -131,7 +142,7 @@ my.plot_skeleton <- function(skl,RacketFace,rad=1,color=4,lwd = 5){
         Y <- xs[1,2] * t + xs[2,2] * (1-t)
         Z <- xs[1,3] * t + xs[2,3] * (1-t)
         tmp <- cylinder3d(center = cbind(X,Y,Z),radius=rad,closed=-1)
-        shade3d(addNormals(subdivision3d(tmp, depth = 2)), col = color)
+        shade3d(addNormals(subdivision3d(tmp, depth = 2)), col = color, alpha = alpha)
         B <- skl[[i]]$B
         tmp1 <- xs[1,] + rad*B[,1]
         tmp2 <- xs[2,] + rad*B[,1]
@@ -145,14 +156,23 @@ my.plot_skeleton <- function(skl,RacketFace,rad=1,color=4,lwd = 5){
 
 ```
 
+下肢の骨のR L の名称はRが左でLが右になっていることに注意。
+
+上肢の骨のR L の名称はRが右でLが左。
+
+直してもよいが、後回し。
+
+
 ```{r}
 library(igraph)
 
 Base.st <- diag(rep(1,3))
 
-Root <- list(ID=1,xs = rbind(c(0,0,0),c(0,0,0)), B=Base.st,L=0,nJ=2,Js=list(J1=list(psi=0,theta=0,v=1,E=2),J2=list(psi=pi,theta=pi,v=2,E=3)))
+Root <- list(ID=1,xs = rbind(c(0,0,0),c(0,0,0)), B=Base.st,L=0,nJ=2,Js=list(J1=list(psi=0,theta=0,v=1,E=19),J2=list(psi=pi,theta=pi,v=2,E=3)))
 
-Spine <- list(ID=2,L=60,nJ=3,Js=list(J1=list(psi=pi,theta=pi,v=2,E=1),J2=list(psi=-pi/2,theta=0,v=2,E=4),J3=list(psi=pi/2,theta=0,v=2,E=5)))
+SpineL <- list(ID=19,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=1),J2=list(psi=0,theta=0,v=2,E=2)))
+
+SpineT <- list(ID=2,L=30,nJ=3,Js=list(J1=list(psi=pi,theta=pi,v=1,E=19),J2=list(psi=-pi/2,theta=0,v=2,E=4),J3=list(psi=pi/2,theta=0,v=2,E=5)))
 
 Pelvis <- list(ID=3,L=10,nJ=3,Js=list(J1=list(psi=pi,theta=pi,v=1,E=1),J2=list(psi=pi/2,theta=0,v=2,E=6),J3=list(psi=-pi/2,theta=0,v=2,E=7)))
 
@@ -164,9 +184,9 @@ FemurR <- list(ID=8,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=6),J2=list(p
 
 FemurL <- list(ID=9,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=7),J2=list(psi=0,theta=0,v=2,E=11)))
 
-TibiaR <- list(ID=10,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=8),J2=list(psi=0,theta=0,v=2,E=NULL)))
+TibiaR <- list(ID=10,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=8),J2=list(psi=pi/2,theta=-pi/2,v=2,E=21)))
 
-TibiaL <- list(ID=10,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=9),J2=list(psi=0,theta=0,v=2,E=NULL)))
+TibiaL <- list(ID=11,L=35,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=9),J2=list(psi=pi/2,theta=-pi/2,v=2,E=22)))
 
 ClavicleR <- list(ID=4,L=20,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=2),J2=list(psi=pi/2,theta=pi,v=2,E=12)))
 
@@ -176,26 +196,36 @@ HumerusR <- list(ID=12,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=4),J2=lis
 
 HumerusL <- list(ID=13,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=5),J2=list(psi=0,theta=0,v=2,E=15)))
 
-UlnaR <- list(ID=14,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=12),J2=list(psi=pi/2,theta=pi/2,v=2,E=16)))
+#UlnaR <- list(ID=14,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=12),J2=list(psi=pi/2,theta=pi/2,v=2,E=16)))
 
-UlnaL <- list(ID=15,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=13),J2=list(psi=pi/2,theta=pi/2,v=2,E=17)))
+#UlnaL <- list(ID=15,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=13),J2=list(psi=pi/2,theta=pi/2,v=2,E=17)))
 
-HandR <- list(ID=16,L=10,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=14),J2=list(psi=0,theta=0,v=2,E=18)))
+UlnaR <- list(ID=14,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=12),J2=list(psi=0,theta=0,v=2,E=16)))
+
+UlnaL <- list(ID=15,L=30,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=13),J2=list(psi=0,theta=0,v=2,E=17)))
+
+HandR <- list(ID=16,L=10,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=14),J2=list(psi=pi/2,theta=pi/2,v=2,E=18)))
 
 HandL <- list(ID=17,L=10,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=15),J2=list(psi=0,theta=0,v=2,E=NULL)))
 
-RacketShuftR <-  list(ID=18,L=40,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=16),J2=list(psi=0,theta=0,v=2,E=19)))
+RacketShuftR <-  list(ID=18,L=40,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=16),J2=list(psi=0,theta=0,v=2,E=20)))
 
-RacketFaceR <-  list(ID=19,L=20,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=18),J2=list(psi=0,theta=0,v=2,E=NULL)))
+RacketFaceR <-  list(ID=20,L=20,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=18),J2=list(psi=0,theta=0,v=2,E=NULL)))
 
-Skeleton.st <- list(S1=Root,S2=Spine,S3=Pelvis,S4=ClavicleR,S5=ClavicleL,S6=Pelvis2R,S7=Pelvis2L,S8=FemurR,S9=FemurL,S10=TibiaR,S11=TibiaL,S12=HumerusR,S13=HumerusL,S14=UlnaR,S15=UlnaL,S16=HandR,S17=HandL,S18=RacketShuftR,S19=RacketFaceR)
+FootR <- list(ID=21,L=25,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=10),J2=list(psi=0,theta=0,v=2,E=NULL)))
+
+FootL <- list(ID=22,L=25,nJ=2,Js=list(J1=list(psi=pi,theta=pi,v=1,E=11),J2=list(psi=0,theta=0,v=2,E=NULL)))
+
+Skeleton.st <- list(S1=Root,S2=SpineT,S3=Pelvis,S4=ClavicleR,S5=ClavicleL,S6=Pelvis2R,S7=Pelvis2L,S8=FemurR,S9=FemurL,S10=TibiaR,S11=TibiaL,S12=HumerusR,S13=HumerusL,S14=UlnaR,S15=UlnaL,S16=HandR,S17=HandL,S18=RacketShuftR,S19=SpineL,S20=RacketFaceR,S21=FootR,S22=FootL)
 
 
-j.list <- rbind(c(1,2),c(1,3),c(3,6),c(3,7),c(6,8),c(7,9),c(8,10),c(9,11),c(2,4),c(2,5),c(4,12),c(5,13),c(12,14),c(13,15),c(14,16),c(15,17),c(16,18),c(18,19))
+j.list <- rbind(c(1,19),c(19,2),c(1,3),c(3,6),c(3,7),c(6,8),c(7,9),c(8,10),c(9,11),c(2,4),c(2,5),c(4,12),c(5,13),c(12,14),c(13,15),c(14,16),c(15,17),c(16,18),c(18,20),c(10,21),c(11,22))
+
+RacketFaceID <- 20
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 ## 関節の動き
@@ -211,7 +241,7 @@ Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
 ```
 
 ```{r}
-jid <- 1
+jid <- 3
 ```
 
 #### 前傾・後傾
@@ -220,15 +250,11 @@ jid <- 1
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 側屈
@@ -237,15 +263,11 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 回旋
@@ -254,15 +276,11 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/6
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 ### 股関節
@@ -277,7 +295,7 @@ Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
 ```
 
 ```{r}
-jid <- 5
+jid <- 6
 ```
 
 #### 屈曲・伸展
@@ -289,15 +307,11 @@ jid <- 5
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 内転・外転
@@ -309,15 +323,11 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 内旋・外旋
@@ -331,15 +341,11 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 右股関節
@@ -348,7 +354,7 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
 ```
 ```{r}
-jid <- 6
+jid <- 7
 ```
 
 #### 屈曲・伸展
@@ -361,15 +367,11 @@ jid <- 6
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 内転・外転
@@ -382,15 +384,11 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 内旋・外旋
@@ -406,15 +404,11 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 ### 膝関節
@@ -425,7 +419,7 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
 ```
 ```{r}
-jid <- 7
+jid <- 8
 ```
 
 #### 屈曲・伸展
@@ -436,15 +430,11 @@ jid <- 7
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 内転・外転
@@ -458,15 +448,11 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 内旋・外旋
@@ -480,15 +466,11 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 右膝関節
@@ -497,7 +479,7 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
 ```
 ```{r}
-jid <- 8
+jid <- 9
 ```
 
 #### 屈曲・伸展
@@ -510,15 +492,11 @@ jid <- 8
 theta <- pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 内転・外転
@@ -534,15 +512,11 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/6
 a1 <- 1
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 #### 内旋・外旋
@@ -556,46 +530,387 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 theta <- pi/4
 a1 <- 1
 a2 <- 2
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
+
+### 胸鎖関節
+
+#### 右胸鎖関節
+
+```{r}
+Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
+```
+```{r}
+jid <- 10
+```
+
+#### 屈曲・伸展
+
+* $\theta > 0$ で伸展(後方へ)
+* $\theta < 0$ で屈曲(前方へ)
+```{r}
+theta <- pi/6
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+#### 内転・外転
+
+
+
+* $\theta > 0$ で外転(上へ)
+* $\theta < 0$ で内転(下へ)
+
+```{r}
+theta <- pi/6
+a1 <- 1
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+#### 内旋・外旋
+
+起きない動き
+
+* $\theta > 0$で外旋(鎖骨が軸方向に回転して、下面が前面に来る)
+)
+* $\theta < 0$で内旋
+
+```{r}
+theta <- pi/4
+a1 <- 1
+a2 <- 2
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+### 肩関節
+
+#### 右肩関節
+
+```{r}
+Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
+```
+```{r}
+jid <- 12
+```
+
+#### 屈曲・伸展
+
+* $\theta > 0$ で屈曲(前へ)
+* $\theta < 0$ で伸展(後へ)
+```{r}
+theta <- pi/6
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+#### 内転・外転
+
+
+
+* $\theta > 0$ で内転(体幹側へ)
+* $\theta < 0$ で外転(体幹から離れる方向へ)
+
+```{r}
+theta <- pi/6
+a1 <- 1
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+#### 内旋・外旋
+
+起きない動き
+
+* $\theta > 0$で外旋(上腕骨が軸方向に回転して、外を向く)
+)
+* $\theta < 0$で内旋
+
+```{r}
+theta <- pi/4
+a1 <- 1
+a2 <- 2
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+### 肘関節
+
+#### 右肘関節
+
+```{r}
+Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
+```
+```{r}
+jid <- 14
+```
+
+#### 屈曲・伸展
+
+* $\theta > 0$ で屈曲(前腕を上げる)
+* $\theta < 0$ で伸展(前腕を下げる)
+```{r}
+theta <- pi/6
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+#### 内転・外転
+
+肘関節ではできない
+
+* $\theta > 0$ で内転(体幹側へ)
+* $\theta < 0$ で外転
+
+```{r}
+theta <- pi/6
+a1 <- 1
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+#### 内旋・外旋
+
+起きない動き
+
+* $\theta > 0$で外旋(回外)
+)
+* $\theta < 0$で内旋(回内)
+
+```{r}
+theta <- pi/4
+a1 <- 1
+a2 <- 2
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+### 手関節
+
+#### 右手関節
+
+```{r}
+Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
+```
+```{r}
+jid <- 16
+```
+
+#### 回旋
+
+手関節ではできない？
+
+* $\theta > 0$ で外旋
+* $\theta < 0$ で内旋
+```{r}
+theta <- pi/6
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+#### 側屈
+
+
+
+* $\theta > 0$ で親指側へ側屈
+* $\theta < 0$ で小指側へ側屈
+
+```{r}
+theta <- pi/6
+a1 <- 1
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+#### 屈曲・伸展
+
+起きない動き
+
+* $\theta > 0$で屈曲
+)
+* $\theta < 0$で伸展
+
+```{r}
+theta <- pi/6
+a1 <- 1
+a2 <- 2
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+### ラケットの握り方
+
+#### 右ラケットの握り方
+
+```{r}
+Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
+```
+```{r}
+jid <- 18
+```
+
+
+
+#### グリップの持ち替え
+
+ウェスタングリップが0度。
+
+イースタングリップが90度。
+
+
+```{r}
+theta <- pi/2
+a1 <- 1
+a2 <- 2
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+### バックハンドでドライブの構え
+
+イースタングリップのまま、手関節を少し伸展し、肘関節を回外する。
+
+```{r}
+Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
+```
+
+
+```{r}
+jid <- 14
+theta <- pi/2
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+jid <- 18
+theta <- pi/2
+a1 <- 1
+a2 <- 2
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+jid <- 16
+theta <- pi/2
+a1 <- 1
+a2 <- 2
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
 
 ### 長座
 
+#### 骨盤が立っているときの長座
 左右の股関節の90度屈曲
 ```{r}
 Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
 ```
 ```{r}
-jid <- 5
-theta <- -pi/2
-a1 <- 2
-a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
 jid <- 6
 theta <- -pi/2
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+jid <- 7
+theta <- -pi/2
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+#### 骨盤が後傾しているときの長座
+左右の股関節の90度屈曲
+```{r}
+Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
+```
+```{r}
+jid <- 3
+theta <- pi/9
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+jid <- 2
+theta <- -pi/4
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+jid <- 6
+theta <- -pi/4
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+jid <- 7
+theta <- -pi/4
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 ### スクワット
@@ -605,54 +920,140 @@ my.plot_skeleton(Skeleton,RacketFace=19)
 Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
 ```
 ```{r}
-jid <- 1
+jid <- 3
+theta <- pi/100
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+# 股関節
+jid <- 6
+theta <- -pi/2 
+a1 <- 2
+a2 <- 3
+tmpR1 <- my.rotMat(jid,a1,a2,theta)
+theta2 <- -pi/4
+a1 <- 1
+a2 <- 2
+tmpR2 <- my.rotMat(jid,a1,a2,theta2)
+Js[[jid]] <- tmpR2 %*% tmpR1
+jid <- 7
+theta <- -pi/2 
+a1 <- 2
+a2 <- 3
+tmpR1 <- my.rotMat(jid,a1,a2,theta)
+theta2 <- pi/4
+a1 <- 1
+a2 <- 2
+tmpR2 <- my.rotMat(jid,a1,a2,theta2)
+Js[[jid]] <- tmpR2 %*% tmpR1
+jid <- 8
+theta <- pi/2
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+jid <- 9
+theta <- pi/2
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+jid <- 20
+theta <- pi/6
+a1 <- 1
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+jid <- 21
+theta <- pi/6
+a1 <- 1
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+# ウェスタングリップにしてバッグで構える
+# 蠅叩き式に
+# 肩
+jid <- 12
+theta <- pi/6 
+a1 <- 2
+a2 <- 3
+tmpR1 <- my.rotMat(jid,a1,a2,theta)
+theta2 <- -pi/6
+a1 <- 1
+a2 <- 3
+tmpR2 <- my.rotMat(jid,a1,a2,theta2)
+Js[[jid]] <- tmpR2 %*% tmpR1
+#theta <- pi/3
+#a1 <- 2
+#a2 <- 3
+#Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+# 肘
+jid <- 14
+theta <- pi/4
+a1 <- 2
+a2 <- 3
+tmpR1 <- my.rotMat(jid,a1,a2,theta)
+theta2 <- -pi/4
+a1 <- 1
+a2 <- 2
+tmpR2 <- my.rotMat(jid,a1,a2,theta2)
+
+Js[[jid]] <- tmpR2 %*% tmpR1
+
+# グリップ
+jid <- 18
+theta <- pi/2 # イースタングリップ
+#theta <- 0 # ウェスタングリップ
+a1 <- 1
+a2 <- 2
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+
+# 手関節を尺側に少しまげて、ラケットを前倒しにする
+jid <- 16
+theta <- -pi/10
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+#Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+
+Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
+
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
+```
+
+```{r}
+Js <- rep(list(diag(rep(1,3))),length(j.list[,1]))
+```
+
+### 左脚を前に出す
+
+```{r}
+jid <- 3
 theta <- -pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
-jid <- 5
-theta <- -pi/6
-a1 <- 2
-a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 jid <- 6
 theta <- -pi/6
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
+jid <- 7
+theta <- -pi/6
+a1 <- 2
+a2 <- 3
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 jid <- 7
 theta <- pi/3
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 jid <- 8
 theta <- pi/3
 a1 <- 2
 a2 <- 3
-Js[[jid]] <- Base.st
-Js[[jid]][a1,a1] <- cos(theta)
-Js[[jid]][a2,a2] <- cos(theta)
-Js[[jid]][a1,a2] <- -sin(theta)
-Js[[jid]][a2,a1] <- sin(theta)
+Js[[jid]] <- my.rotMat(jid,a1,a2,theta)
 Skeleton <- my_calculate_skeleton(Skeleton.st,j.list,Js=Js)
 
-my.plot_skeleton(Skeleton,RacketFace=19)
+my.plot_skeleton(Skeleton,RacketFace=RacketFaceID)
 ```
 
 ## ラケットの面を作る
