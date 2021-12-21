@@ -1,0 +1,301 @@
+---
+title: "逆引きロシア単語"
+author: "Ryo Yamada"
+date: "2021/12/21"
+output: html_doument
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(stringr)
+```
+## キリル文字
+
+全33文字、大文字と小文字。
+
+```{r}
+uppers <- "АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯЁ"
+lowers <- "абвгдежзийклмнопрстуфхцчшщъыьэюяё"
+uppers <- unlist(strsplit(uppers,""))
+lowers <- unlist(strsplit(lowers,""))
+```
+
+## 品詞
+
+```{r}
+hinshi.jp <- c("名詞","代名詞","動詞","形容詞")
+hinshi <- c("N","P","V","A") # Noun, Pronoun,Verb,Addjetive
+```
+
+## 文法特性
+
+性、単・複、六格
+
+```{r}
+sex <- c("m","f","n")
+num <- c("s","p")
+kaku <- c("Syu","Sei","Yo","Tai","Zou","Zenhi") # 主・生・与・対・造・前置
+```
+
+## 品詞の基本特性
+
+```{r}
+N.params <- list(sex,num,kaku)
+P.params <- list(sex,num,kaku)
+V.params <- list(sex,num,kaku)
+A.params <- list(sex,num,kaku)
+```
+
+
+## Yaruku辞書からの読み込み
+
+冒頭には検索した文字列が、多彩な変化体のどれに合致するかの情報が提示されるが、今回の作業では、その情報は不要。
+
+情報行にキリル文字列がある行は、
+文字列変化の情報行。
+その行には、その文字列に限った情報が書かれている。
+
+キリル文字列がない行は、キリル文字列に関する情報のうち、
+複数のキリル文字列に関する情報を提供する。
+
+後になって、同類の情報が提供された場合には、上書きされるべき情報である。
+
+```{r}
+library(Dict)
+hinshis <- c("名詞","代名詞","動詞","形容詞")
+sex <- c("男性","女性","中性")
+
+# 情報開始行の番数を返す
+my.line.number.info <- function(str,sep){
+  sep1 <- unlist(strsplit(str,sep))
+  hinshi.line <- 0
+  
+  for(i in 1:length(sep1)){
+    if(is.element(sep1[i],hinshis)){
+      hinshi.line <- i
+      hinshi <- sep1[i]
+      break
+    }
+  }
+  return(i)
+}
+```
+```{r}
+test1 <- c("пространства 名詞 中性,単数,生格
+пространства 名詞 中性,複数,主格
+пространства 名詞 中性,複数,対格
+名詞
+中性
+単数
+主格 пространство
+生格 пространства
+与格 пространству
+対格 пространство
+造格 пространством
+前置 пространстве
+複数
+主格 пространства
+生格 пространств
+与格 пространствам
+対格 пространства
+造格 пространствами
+前置 пространствах")
+sep <- "\n"
+my.line.number.info(test1,sep)
+```
+入力情報の各行を指定セパレータ区切りで分割し、
+各行をリストにして格納する
+
+```{r}
+my.make.list.with.separation <- function(str,start.line=1,sepa="\n",sepb=" "){
+  sep1 <- unlist(strsplit(str,sepa))
+  sep2 <- list()
+  for(i in start.line:length(sep1)){
+    sep2[[i-start.line+1]] <- unlist(strsplit(sep1[i],sepb))
+  }
+  return(sep2)
+}
+```
+
+```{r}
+tmp.out <- my.make.list.with.separation(test1,5)
+```
+
+情報行をそれぞれ読み込む。
+
+キリル文字なしの行(要素数が１の行)は、タンデムな文字列ベクトルとする。
+その文字列ベクトルを、キリル文字ありの行の登録情報として使う。
+
+キリル文字ありの行は、各行を登録用にリスト要素とする。
+
+一番最初のキリル文字ありの行のキリル文字列は、「複数のキリル文字列を『束ねる基本形』として取出し、各キリル文字列の情報として登録する。
+
+```{r}
+my.make.list.of.words <- function(str,sepa="\n",sepb=" "){
+  info.ve <- c()
+  root.word <- c()
+  root.yet <- TRUE
+  ret <- list()
+  nt <- 1 # retリストの要素番号カウンタ
+  info.line.num <- my.line.number.info(str,sepa)
+  infos <- my.make.list.with.separation(str,start.line=info.line.num,sepa,sepb)
+  
+  for(i in 1:length(infos)){
+    if(length(infos[[i]]) == 1){
+      info.ve <- c(info.ve,infos[[i]][1])
+    }else{
+      if(root.yet){
+        root.word <- infos[[i]][2]
+        root.yet <- FALSE
+      }
+      tmp.info1 <- my.info.select(info.ve)
+      ret[[nt]] <- list(word=infos[[i]][2],kaku=infos[[i]][1],info1=tmp.info1,info2=infos[[i]][3],repword=root.word)
+      nt <- nt+1
+    }
+  }
+  return(ret)
+}
+```
+
+```{r}
+tmp.out2 <- my.make.list.of.words(test1)
+```
+
+info1 として登録した情報は、上書きしていかないといけないので、その処理を後付けで行う。
+
+```{r}
+library(stringr)
+my.info.select <- function(x,term.gr=list(c("名詞","形容詞","動詞"),c("男性","女性","中性"),c("単数","複数"),c("一人称","二人称","三人称"))){
+  ret <- c()
+  for(i in 1:length(term.gr)){
+    tmp <- rep(FALSE,length(length(x)))
+    for(j in 1:length(term.gr[[i]])){
+      tmp <- tmp | str_detect(x, pattern=term.gr[[i]][j])
+    }
+    s <- which(tmp)
+    if(length(s)>1){
+      x <- c(x[-s],x[max(s)])
+    }
+    
+  }
+  return(x)
+}
+```
+
+```{r}
+test2 <- c("он 代名詞 三人称,男性,単数,主格
+代名詞
+三人称、男性、単数
+主格 он
+生格 его
+与格 ему
+対格 его
+造格 им
+前置 нем")
+my.make.list.of.words(test2)
+```
+## たくさんのファイルを保存して、それを読み込む
+
+```{r}
+library(readr)
+library(stringi)
+
+pth <- "C:/Users/Ryo Yamada/Desktop/Yuruku/"
+filenames <- list.files(pth, pattern="*.txt", full.names=TRUE)
+ldf <- lapply(filenames, read_file)
+res <- lapply(ldf,my.make.list.of.words,sepa="\r\n")
+
+RES <- list()
+nt <- 1
+for(i in 1:length(res)){
+  for(j in 1:length(res[[i]])){
+    RES[[nt]] <- res[[i]][[j]]
+  nt <- nt + 1
+  }
+}
+length(RES)
+```
+## 語尾から検索
+
+```{r}
+my.searh.tail <- function(w,dict,tochek=nchar(w)){
+  d.w <- sapply(dict,function(d){d$word})
+  len <- nchar(w)
+
+  ret <- list()
+  for(i in 1:length(tochek)){
+    ret[[i]] <- c()
+    tmp <- lapply(d.w,function(x){tmp.len <- nchar(x);return(substr(x,(tmp.len-tochek[i]+1),tmp.len))})
+    target <- substr(w,len-tochek[i]+1,len)
+    tmp2 <- sapply(tmp,function(x){return(x==target)})
+    ret[[i]] <- which(tmp2)
+  }
+  return(ret)
+}
+```
+
+```{r}
+# out <- my.searh.tail("ейших",RES,tohek=(2,5))
+out <- my.searh.tail("ейших",RES)
+```
+
+## 結果の表示
+
+```{r}
+my.searh.string <- function(word){
+  ret <- paste(paste(word$info1,collapse=","),word$info2,word$word,word$repword,sep="_")
+  return(ret)
+}
+my.display <- function(dict,ids){
+  ret <- c()
+  for(i in 1:length(ids)){
+    tmp <- dict[[ids[i]]]
+    ret <- c(ret,my.searh.string(tmp))
+  }
+  return(ret)
+}
+```
+
+```{r}
+my.summary.tail.stat <- function(w,dict){
+  out <- my.searh.tail(w,dict)
+  info1s <- info2s <- c()
+  for(i in 1:length(out[[1]])){
+    wd <- dict[[out[[1]][i]]]
+    info1s <- c(info1s,wd$info1)
+    info2s <- c(info2s,wd$info2)
+  }
+  print(table(info1s))
+  print(table(info2s))
+}
+my.summary.tail <- function(w,dict){
+  out <- my.searh.tail(w,dict)
+  ret <- my.display(dict,out[[1]])
+  return(ret)
+}
+```
+
+
+```{r}
+pth <- "C:/Users/Ryo Yamada/Desktop/Yuruku/"
+filenames <- list.files(pth, pattern="*.txt", full.names=TRUE)
+ldf <- lapply(filenames, read_file)
+res <- lapply(ldf,my.make.list.of.words,sepa="\r\n")
+
+RES <- list()
+nt <- 1
+for(i in 1:length(res)){
+  for(j in 1:length(res[[i]])){
+    RES[[nt]] <- res[[i]][[j]]
+  nt <- nt + 1
+  }
+}
+length(RES)
+
+my.summary.tail("ую",RES)
+my.summary.tail.stat("ую",RES)
+```
