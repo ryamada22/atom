@@ -1,0 +1,835 @@
+---
+title: "シャトルコックの力学2"
+author: "Ryo Yamada"
+date: "2022/1/1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## 3次元回転とクオータニオン関連のユーティリティ関数
+```{r}
+library(onion)
+my.v2q <- function(v){
+  (v[1]*Hi+v[2]*Hj+v[3]*Hk)
+}
+my.q2v <- function(q){
+  c(i(q),j(q),k(q))
+}
+my.calc.q <- function(a,theta){
+  cos(theta/2) + sin(theta/2) * my.v2q(a)
+}
+my.outerprod <- function(v,v0){
+  c(v[2]*v0[3]-v[3]*v0[2],v[3]*v0[1]-v[1]*v0[3],v[1]*v0[2]-v[2]*v0[1])
+}
+# ２つの単位ベクトルv,v0から
+# vを回してv0に重ねるクオータニオンを返す
+my.rotation.q <- function(v,v0){
+  if(sum((v-v0)^2)==0){
+    return(list(q=1+0*Hi,rot.axis=v0,theta=0))
+  }
+  rot.axis <- my.outerprod(v,v0)
+  # c(v1[2]*v2[3]-v1[3]*v2[2],v1[3]*v2[1]-v1[1]*v2[3],v1[1]*v2[2]-v1[2]*v2[1])
+  rot.axis <- rot.axis/sqrt(sum(rot.axis^2))
+  tmp <- sum(v*v0)
+  if(abs(tmp)>1){
+    tmp <- sign(tmp) * 1
+  }
+  theta <- acos(tmp)
+  q <- my.calc.q(rot.axis,theta)
+  #q <- cos(theta/2) + sin(theta/2) * (Hi * rot.axis[1] + Hj * rot.axis[2] + Hk * rot.axis[3])
+  return(list(q=q,rot.axis=rot.axis,theta=theta))
+}
+
+my.rotation.with.q <- function(v,q){
+  v.q <- my.v2q(v)
+  tmp <- Conj(q) * v.q * q
+  return(my.q2v(tmp))
+}
+```
+## シャトルコックの形状とコート
+
+```{r}
+# シャトルのサイズの単位はcm
+my.shuttlecock <- function(){
+  H <- c(0,0,0) # 先端
+  hR <- 1.25 # 頭部コルク半径
+  wL <- 1.7 # 先端から重心までの長さ
+  aL <- 1.8 # 先端から気流力学中心
+  L <- 8.5 # 長軸長
+  FcL <- -0.3 # 羽の終結点の先端からの距離
+  sR <- 3 # 羽のスカートの作る底面円の半径
+  sRmin <- 2.9
+  sRmax <- 3.1
+  
+  Fc <- H + c(FcL,0,0) # 羽の終結点座標
+  Hc <- H + c(hR,0,0) # 頭部の中心
+  Wc <- H + c(wL,0,0) # 重心
+  Ac <- H + c(aL,0,0) # 気流力学中心
+  # 羽のスカート端
+  nF <- 12
+  t <- seq(from=0,to=1,length=nF+1) * 2 * pi
+  t <- t[-1]
+  
+  innerS <- cbind(rep(L,nF),sRmin * cos(t),sRmin * sin(t))
+  outerS <- cbind(rep(L,nF),sRmax * cos(t),sRmax * sin(t))
+  outerS <- outerS[c(2:nF,1),]
+  
+  return(list(H=H,Hc=Hc,Fc=Fc,Wc=Wc,Ac=Ac,innerS = innerS,outerS=outerS,hR=hR))
+}
+library(rgl)
+my.plot.shuttlecock <- function(R = diag(rep(1,3)),S=rep(0,3),new=FALSE){
+  st <- my.shuttlecock()
+  nh <- 1
+  nFc <- 1
+  ninnerS <- length(st$innerS[,1])
+  nouterS <- length(st$outerS[,1])
+  
+  tmp <- rbind(st$H,st$Hc,st$Fc,st$innerS,st$outerS)
+  tmp <- t(t(tmp)-st$Wc)
+  tmp. <- tmp %*% R
+  tmp. <- t(t(tmp.) + S+st$Wc)
+  st2 <- st
+  st2$H <- tmp.[1,]
+  st2$Hc <- tmp.[2,]
+  st2$Fc <- tmp.[3,]
+  st2$innerS <- tmp.[(1+3):(ninnerS+3),]
+
+  st2$outerS <- tmp.[(1+3+ninnerS):(nouterS+3+ninnerS),]
+  if(new){
+    open3d()
+  }
+  
+  spheres3d(st2$Hc,radius=st$hR,alpha=0.5)
+  for(i in 1:ninnerS){
+    tmp2 <- rbind(st2$Fc,st2$innerS[i,],st2$outerS[i,])
+    triangles3d(tmp2,alpha=0.5)
+  }
+}
+
+my.plot.shuttlecock.q <- function(Q = 1 + 0*(Hi+Hj+Hk),S=rep(0,3),Z=c(-1,0,0),new=FALSE,col=1){
+  #Z.q <- my.v2q(Z)
+  Sst <- c(-1,0,0)
+  if(sum((Z-Sst)^2)>0){
+    Z.q <- my.rotation.q(Z,Sst)$q
+  }else{
+    Z.q <- 1 + 0 * Hi
+  }
+  Q <- Z.q * Q
+  st <- my.shuttlecock()
+  nh <- 1
+  nFc <- 1
+  ninnerS <- length(st$innerS[,1])
+  nouterS <- length(st$outerS[,1])
+  
+  tmp <- rbind(st$H,st$Hc,st$Fc,st$innerS,st$outerS)
+  #tmp <- t(t(tmp)-st$Wc)
+  tmp <- t(apply(tmp,1,function(x){x-st$Wc}))
+  tmp. <- t(apply(tmp,1,my.rotation.with.q,q=Q))
+  
+  
+  #tmp. <- cbind(i(tmp.q.),j(tmp.q.),k(tmp.q.))
+  #tmp. <- t(t(tmp.) + S + st$Wc)
+  tmp. <- t(apply(tmp.,1,function(x){x+S+st$Wc}))
+  st2 <- st
+  st2$H <- tmp.[1,]
+  st2$Hc <- tmp.[2,]
+  st2$Fc <- tmp.[3,]
+  st2$innerS <- tmp.[(1+3):(ninnerS+3),]
+
+  st2$outerS <- tmp.[(1+3+ninnerS):(nouterS+3+ninnerS),]
+  if(new){
+    open3d()
+  }
+  
+  spheres3d(st2$Hc,radius=st$hR,alpha=0.5,col=col)
+  for(i in 1:ninnerS){
+    tmp2 <- rbind(st2$Fc,st2$innerS[i,],st2$outerS[i,])
+    triangles3d(tmp2,alpha=0.5)
+  }
+}
+```
+```{r}
+my.court <- function(){
+  Llong <- 1340
+  Lshort <- 610
+  Rec1 <- rbind(c(-Llong/2,Lshort/2,0),c(Llong/2,Lshort/2,0),c(Llong/2,-Lshort/2,0),c(-Llong/2,-Lshort/2,0))
+  
+  Sline <- 198
+  Line1 <- rbind(c(-Sline,Lshort/2,0),c(-Sline,-Lshort/2,0))
+  Line2 <- rbind(c(Sline,Lshort/2,0),c(Sline,-Lshort/2,0))
+  
+  Nhight <- 155
+  Nhight2 <- 152.4
+  LineNet <- rbind(c(0,Lshort/2,Nhight),c(0,-Lshort/2,Nhight))
+  LineCtr <- rbind(c(0,Lshort/2,0),c(0,-Lshort/2,0))
+  Rec2 <- rbind(c(0,-Lshort/2,Nhight),c(0,Lshort/2,Nhight),c(0,Lshort/2,0),c(0,-Lshort/2,0))
+  
+  LinePole1 <- rbind(c(0,Lshort/2,0),c(0,Lshort/2,Nhight))
+  LinePole2 <- rbind(c(0,-Lshort/2,0),c(0,-Lshort/2,Nhight))
+  
+  Recs <- list(Rec1)
+  Lines <- list(Line1,Line2,LineNet,LineCtr,LinePole1,LinePole2)
+  
+  CeilHight <- 400
+  Space <- rbind(c(Llong/2,Lshort/2,0),c(-Llong/2,-Lshort/2,0),c(0,0,CeilHight))
+  
+  return(list(Recs=Recs,Lines=Lines,Space=Space))
+}
+my.plot.court <- function(new=TRUE){
+  Crt <- my.court()
+  if(new){
+    open3d()
+    plot3d(Crt$Space,xlab="",ylab="",zlab="",axes=FALSE,aspect=FALSE)
+  }
+  for(i in 1:length(Crt$Recs)){
+    polygon3d(Crt$Recs[[i]],col="green",alpha=0.3)
+  }
+  for(i in 1:length(Crt$Lines)){
+    segments3d(Crt$Lines[[i]])
+  }
+  
+}
+```
+```{}
+my.plot.shuttlecock.q.ori <- function(Q = 1 + 0*(Hi+Hj+Hk),S=rep(0,3),new=FALSE){
+  st <- my.shuttlecock()
+  nh <- 1
+  nFc <- 1
+  ninnerS <- length(st$innerS[,1])
+  nouterS <- length(st$outerS[,1])
+  
+  tmp <- rbind(st$H,st$Hc,st$Fc,st$innerS,st$outerS)
+  tmp <- t(t(tmp)-st$Wc)
+  tmp.q <- apply(tmp,1,function(x){x[1]*Hi + x[2]*Hj + x[3]*Hk})
+  tmp.q. <- c()
+  tmp. <- matrix(0,0,3)
+  for(i in 1:length(tmp.q)){
+    tmp.q. <- c(tmp.q.,Conj(Q) * tmp.q[[i]] * Q)
+    tmp. <- rbind(tmp.,c(i(tmp.q.[[i]]),j(tmp.q.[[i]]),k(tmp.q.[[i]])))
+  }
+  #tmp.q. <- Conj(Q) * tmp.q * Q
+  
+  #tmp. <- cbind(i(tmp.q.),j(tmp.q.),k(tmp.q.))
+  tmp. <- t(t(tmp.) + S + st$Wc)
+  st2 <- st
+  st2$H <- tmp.[1,]
+  st2$Hc <- tmp.[2,]
+  st2$Fc <- tmp.[3,]
+  st2$innerS <- tmp.[(1+3):(ninnerS+3),]
+
+  st2$outerS <- tmp.[(1+3+ninnerS):(nouterS+3+ninnerS),]
+  if(new){
+    open3d()
+  }
+  
+  spheres3d(st2$Hc,radius=st$hR,alpha=0.5)
+  for(i in 1:ninnerS){
+    tmp2 <- rbind(st2$Fc,st2$innerS[i,],st2$outerS[i,])
+    triangles3d(tmp2,alpha=0.5)
+  }
+}
+
+```
+
+```{r}
+my.plot.shuttlecock()
+my.plot.shuttlecock(S=c(2,1,0))
+```
+
+```{r}
+my.plot.shuttlecock.q()
+my.plot.shuttlecock.q(S=c(2,1,0))
+```
+## コルクヘッドへのインパクト
+
+シャトルコックが標準配置にあるとき、
+ラケット面は、コルクヘッドの$x > 0$な面に触れて力を伝える。
+
+力は、コルクヘッド面の垂直方向（コルクヘッド中心方向）の力$D_p$と、
+コルクヘッド接触点での接平面方向の摩擦力$D_t$とに分かれる。
+
+$D_p$はシャトルコック重心への力$D_{pw}$とその垂直方向の力$D_{pz}$とに分かれる。
+
+$D_{pw}$は重心への加速度となる。
+
+$D_{pz}$は重心と力点とに関するモーメント力となる。
+
+$D_t$は、摩擦係数に応じて変化した強さ $\rho D_t$が伝わる。
+
+そのうち、重心成分$\rho D_{tw}$が重心への加速度を作る。
+
+残りの$\rho D_{tz}$はモーメント力となる。
+
+```{r}
+library(onion)
+# p は接触点の方向単位ベクトル
+# v は力の方向単位ベクトル
+# f は力の強さ
+# rho は摩擦に関する定数係数
+my.head.hit <- function(p,v,f,rho=1){
+  sh <- my.shuttlecock()
+  Wc <- sh$Wc
+  Hc <- sh$Hc
+  Rh <- sh$Rh
+  
+  d_p <- f * sum(p*v) * p
+  # print(sum(p*v))
+  d_t <- rho * ((f * v) - d_p)
+  
+  w2p <- (Hc-Wc) + p
+  L.mom <- sqrt(sum(w2p^2))
+  w2p <- w2p/L.mom
+  
+  d_pw <- sum(d_p * w2p) * w2p
+  d_tw <- sum(d_t * w2p) * w2p
+  
+  d_pz <- d_p - d_pw
+  d_tz <- d_t - d_tw
+  
+  f.acc <- d_pw + d_tw
+  f.mom <- (d_pz + d_tz) * L.mom^2
+  
+  # 回転の力をクオータニオンで表す
+  #v.radius.st
+  v1 <- w2p
+  #v.tangent.st
+  L.f.mom <- sqrt(sum(f.mom^2))
+  if(L.f.mom==0){
+    rot.axis <- v1
+    theta <- 0
+    
+  }else{
+    v2 <- f.mom/L.f.mom
+  
+    rot.axis <- my.outerprod(v1,v2)
+    # c(v1[2]*v2[3]-v1[3]*v2[2],v1[3]*v2[1]-v1[1]*v2[3],v1[1]*v2[2]-v1[2]*v2[1])
+    rot.axis <- rot.axis/sqrt(sum(rot.axis^2))
+    theta <- atan(L.f.mom/L.mom)
+  }
+  q <- my.calc.q(rot.axis,theta)
+  # cos(theta/2) + sin(theta/2) * (Hi * rot.axis[1] + Hj * rot.axis[2] + Hk * rot.axis[3])
+  # 重心に加わる推進力ベクトル f.acc
+  # 重心中心に
+  return(list(f.acc=f.acc,rot.axis=rot.axis,rot.theta=theta,rot.q=q))
+  
+}
+```
+
+
+```{r}
+p.theta <- pi - pi/6
+p <- c(cos(p.theta),0,sin(p.theta))
+v.theta <- pi/8
+v <- c(cos(-v.theta),0,sin(-v.theta))
+f <- 3
+
+out <- my.head.hit(p,v,f)
+```
+```{r}
+f.acc <- out$f.acc
+rot.axis <- out$rot.axis
+rot.theta <- out$rot.theta
+t <- seq(from=0,to=30,length=3)
+
+for(i in 1:length(t)){
+  this.S <- f.acc * t[i]
+  this.theta <- rot.theta * t[i]
+  this.Q <- my.calc.q(rot.axis,this.theta)
+  # cos(this.theta/2) + sin(this.theta/2) * (rot.axis[1] * Hi + rot.axis[2] * Hj + rot.axis[3] * Hk)
+  my.plot.shuttlecock.q(Q=this.Q,S=this.S)
+}
+
+```
+
+
+## ヒット時の姿勢とヒット方向を任意にする
+
+引数を、姿勢情報とヒット方向とにして、
+
+それを、姿勢を基準姿勢に変換して、初速情報を基準姿勢座標で求めたうえで、
+真の姿勢情報に戻す。
+
+重力加速度を物理空間座標で加えることで、重心速度に重力影響を加える。
+
+```{r}
+# p は標準位での接触点の方向単位ベクトル
+# v は標準位での力の方向単位ベクトル
+# f は力の強さ
+# rho は摩擦に関する定数係数
+# Z はシャトルコックの向き
+# P はラケット面の法線方向単位ベクトル(接触点の方向単位ベクトルの逆方向ベクトル) P は -pに相当する
+# V は力の方向単位ベクトル
+
+my.head.hit2 <- function(P,V,Z,f,rho=1){
+  # 標準位の方向ベクトル
+  Sst <- c(-1,0,0)
+  if(sum((Z-Sst)^2)>0){
+    rot.q <- my.rotation.q(Sst,Z)$q
+  }else{
+    rot.q <- 1 + 0 * Hi
+  }
+  
+  Vst <- my.rotation.with.q(V,rot.q)
+  Pst <- my.rotation.with.q(P,rot.q)
+  
+  p <- -Pst
+  v <- Vst
+  out.st <- my.head.hit(p,v,f,rho=rho)
+  # return(list(f.acc=f.acc,rot.axis=rot.axis,rot.theta=theta,rot.q=q))
+  rot.q.inv <- my.rotation.q(Z,Sst)$q
+  f.acc <- my.rotation.with.q(out.st$f.acc,rot.q.inv)
+  rot.axis <- my.rotation.with.q(out.st$rot.axis,rot.q.inv)
+  rot.theta <- out.st$rot.theta
+  rot.q <- my.calc.q(rot.axis,rot.theta)
+  
+  return(list(f.acc=f.acc,rot.axis=rot.axis,rot.theta=rot.theta,rot.q=rot.q))
+}
+```
+
+```{r}
+p.theta <- pi - pi/6
+p <- c(cos(p.theta),0,sin(p.theta))
+v.theta <- pi/8
+v <- c(cos(-v.theta),0,sin(-v.theta))
+f <- 3
+
+Z <- c(1,1,0)
+Z <- Z/sqrt(sum(Z^2))
+
+R.q <- my.rotation.q(Z,c(-1,0,0))$q
+P <- - my.rotation.with.q(p,R.q)
+V <- my.rotation.with.q(v,R.q)
+
+#P <- -c(0,cos(p.theta),sin(p.theta))
+#V <- c(0,cos(-v.theta),sin(-v.theta))
+
+# out <- my.head.hit(p,v,f)
+out2 <- my.head.hit2(P,V,Z,f)
+```
+```{r}
+f.acc <- out2$f.acc
+rot.axis <- out2$rot.axis
+rot.theta <- out2$rot.theta
+t <- seq(from=0,to=30,length=3)
+open3d()
+for(i in 1:length(t)){
+  this.S <- f.acc * t[i]
+  this.theta <- rot.theta * t[i]
+  this.Q <- my.calc.q(rot.axis,this.theta)
+  #print(this.Q)
+  # cos(this.theta/2) + sin(this.theta/2) * (rot.axis[1] * Hi + rot.axis[2] * Hj + rot.axis[3] * Hk)
+  my.plot.shuttlecock.q(Q=this.Q,S=this.S,Z=Z)
+}
+
+```
+## 飛行抵抗の気流力学中心への作用
+
+シャトルコックの形は複雑なので、気流抵抗の強さと向きは進行方向によって複雑に変化すると思われるが、
+次のように単純化できるらしい。
+
+シャトルコックのある場所を気流抵抗中心とすると、
+その点が重心速度の逆方向に、重心速度に比例した力が発生したとしたものが、シャトルコックの表面全体に生じる気流抵抗の積算になるとする。
+
+そしてその力のうちの重心方向成分が、重心加速度となり、垂直成分がモーメントとなる。
+
+自由落下するシャトルはある速さになると、重力加速度と空気抵抗力とが拮抗し、定常状態になる。
+その速さを指定し、空気抵抗力の計算のための係数を定める。
+
+また、シャトルの回転は、ちょっと難しいので次のようにすることにする。
+
+初期回転速度は、減衰することとする。
+回転には空気抵抗力が加速度として寄与しないこととする。
+
+進行方向軸とシャトル軸のずれはそれを補正するように変化する（減衰する）ものとする。
+
+```{r}
+my.airo.drag.v <- function(V,dt,m,g=c(0,0,-9.8)*100,sigma=1){
+  new.V <- V - sigma * sqrt(sum(V^2)) * V / m *dt  + g * dt
+  return(new.V)
+}
+
+my.airo.drag.rot <- function(Q,V,dt,m,sigma=1,sigma2=1){
+  tmp <- 1-sigma * (sum(V^2))  / m *dt
+  theta <- acos(Re(Q)) * 2
+  new.theta <- theta*tmp
+  #new.theta <- theta - (sigma * abs(theta)) * theta * dt
+  ImQ <- Im(Q)
+  ImQ. <- ImQ/Mod(ImQ)
+  A <- my.q2v(ImQ.)
+  new.Q <- my.calc.q(A,new.theta)
+  return(new.Q)
+}
+
+my.airo.drag.Z <- function(Z,V,dt,m,sigma=1){
+  tmp <- 1-sigma * (sum(V^2))  / m *dt
+  V.L <- sqrt(sum(V^2))
+  if(V.L==0){
+    return(Z)
+  }
+  V.st <- V/V.L
+  tmp <- sum(Z*V.st)
+  if(abs(tmp)>1){
+    tmp <- sign(tmp) * 1
+  }
+  theta <- acos(tmp)
+  
+  #new.theta <- theta - (sigma * abs(theta)) * theta * dt
+  new.theta <- theta * tmp
+  #print(new.theta)
+  rot.axis <- my.outerprod(V.st,Z)
+  rot.q <- my.calc.q(rot.axis,new.theta)
+  new.Z <- my.rotation.with.q(V.st,rot.q)
+  return(new.Z)
+  
+}
+```
+
+```{r}
+# Z シャトルコックの向き単位ベクトル
+# V シャトルコックの進行方向単位ベクトル
+# sigma 重心の抵抗係数
+# sigma2はトルクの大きさを調節する係数
+# https://ci.nii.ac.jp/naid/110007489857
+# 抗力は速度の２乗に比例する
+my.airo.drag <- function(Z,V,sigma=0.3,sigma2=1,index=2){
+  sh <- my.shuttlecock()
+  Wc <- sh$Wc
+  Hc <- sh$Hc
+  Ac <- sh$Ac
+  
+  # 抵抗力ベクトルの長さ
+  Lv <- sqrt(sum(V^2))
+  if(Lv==0){
+    return(list(f.acc=0,rot.axis=Z,rot.theta=0,rot.q=1 + 0*Hi))
+  }
+  # 抵抗力の向き単位ベクトル
+  Fv <- (-1) * V /Lv
+  
+  # 抗力
+  D <- Lv^index * Fv * sigma
+  
+  # 抵抗力の重心加速度
+  tmp0 <- sqrt(sum(D^2)) * sum(Z * Fv) * Z
+  #f.acc <- sqrt(sum(D^2)) * sum(Z * Fv) * Fv
+  f.acc <- D
+  
+  # 抵抗力のモーメント力
+  #f.mom <- (D - f.acc) * abs(sqrt(sum((Wc-Ac)^2)))^2
+  tmp <- sqrt(sum(D^2)) * sum(Z * Fv) * Z
+  f.mom <- (D - tmp0) * abs(sqrt(sum((Wc-Ac)^2)))^2 * sigma2 
+  # 回転の力をクオータニオンで表す
+  #v.radius.st
+  v1 <- -Z
+  L.mom <- sqrt(sum(v1^2))
+  #v.tangent.st
+  L.f.mom <- sqrt(sum(f.mom^2))
+  if(L.f.mom==0){
+    rot.axis <- v1
+    theta <- 0
+    
+  }else{
+    v2 <- f.mom/L.f.mom
+  
+    rot.axis <- my.outerprod(v1,v2)
+    #print("outerprod")
+    #print(rot.axis)
+    # c(v1[2]*v2[3]-v1[3]*v2[2],v1[3]*v2[1]-v1[1]*v2[3],v1[1]*v2[2]-v1[2]*v2[1])
+    rot.axis <- rot.axis/sqrt(sum(rot.axis^2))
+    theta <- atan(L.f.mom/L.mom)
+  }
+  q <- my.calc.q(rot.axis,theta)
+  
+  # cos(theta/2) + sin(theta/2) * (Hi * rot.axis[1] + Hj * rot.axis[2] + Hk * rot.axis[3])
+  # 重心に加わる推進力ベクトル f.acc
+
+  return(list(f.acc=f.acc,rot.axis=rot.axis,rot.theta=theta,rot.q=q))
+  
+}
+```
+
+```{r}
+
+# 重力加速度（環境加速度)
+g <- c(0,0,-9.8)*100  # 9.8m/s^2, 980cm/s^2
+# 質量の係数
+m <- 5 # 単位はgram
+# 初期状態
+# 初期シャトルコック先端の位置座標
+X0 <- c(-200,0,115) # サービスを打つ場所と高さ
+# 構えのシャトルの向き
+this.Z <- c(-0.2,0,-0.4)
+#this.Z <- c(-1,0,0)
+this.Z <- this.Z/sqrt(sum(this.Z^2))
+my.plot.court()
+my.plot.shuttlecock.q(Q=1+0*Hi,S=X0,Z=this.Z)
+
+# サーブヒットする
+P <- c(1,0,-0.05)
+#P <- c(1,0,0.00)
+P <- P/sqrt(sum(P^2))
+
+V <- c(1,0,0.5)
+#V <- c(1,0,0)
+V <- V/sqrt(sum(V^2))
+# ショートサーブの初速を、4m/sくらいにしたい。
+# f.accは「初速を与える加速度 m/s^2」かけるシャトル質量
+#f <- 2000 # 水平にコックの頭をきれいにたたくと4m/sになる力の強さ
+f <- 500000
+out2 <- my.head.hit2(P,V,this.Z,f)
+f.acc <- out2$f.acc
+rot.axis <- out2$rot.axis
+rot.theta <- out2$rot.theta/m
+
+initial.velocity <- f.acc/m
+print("初速 cm/s")
+print(sqrt(sum(initial.velocity^2)))
+
+dt <- 0.1
+
+this.S <- initial.velocity * dt
+this.theta <- rot.theta * dt
+this.Q <- my.calc.q(rot.axis,this.theta)
+my.plot.shuttlecock.q(Q=this.Q,S=this.S+X0,Z=this.Z,col=2)
+```
+
+```{r}
+my.plot.court()
+# 抵抗係数
+v.const <- 400 # 自由落下のときの定常速度 m/s
+sigma <- -g[3]*m/(v.const^2)
+
+sigma2 <- sigma * m
+sigma3 <- sigma * m
+# 初期シャトルコック向き
+Z0 <- this.Z
+
+# 初速度
+V0 <- initial.velocity
+# 初期回転速度
+# tmp.q <- my.rotation.q(c(1,0.2,0),c(0,0,-1))
+
+A0 <- rot.axis
+Theta0 <- rot.theta
+Q0 <- my.calc.q(A0,Theta0)
+
+t <- seq(from=0,to=1.5,length=500)
+dt <- t[2]-t[1]
+
+Xs <- Zs <- Vs <- As <- matrix(0,length(t),3)
+Thetas <- rep(0,length(t))
+Qs <- rep(0*Hi,length(t))
+
+Xs[1,] <- X0
+Zs[1,] <- Z0
+Vs[1,] <- V0
+Qs[1] <- Q0
+As[1,] <- A0
+Thetas[1] <- Theta0
+
+for(i in 1:(length(t)-1)){
+#for(i in 1:40){
+  this.X <- Xs[i,]
+  this.V <- Vs[i,]
+  this.Z <- Zs[i,]
+  this.Q <- Qs[i]
+  this.A <- As[i,]
+  this.Theta <- Thetas[i]
+  next.X <- Xs[i,] + this.V * dt
+
+  next.V <- my.airo.drag.v(this.V,dt=dt,m=m,g=g,sigma=sigma)
+  next.Q <- my.airo.drag.rot(this.Q,this.V,dt=dt,m=m,sigma=sigma2)
+  next.Z <- my.airo.drag.Z(this.Z,this.V,dt=dt,m=m,sigma=sigma3)
+  
+  Xs[i+1,] <- next.X
+  Vs[i+1,] <- next.V
+  Zs[i+1,] <- next.Z
+  Qs[i+1] <- next.Q
+
+  my.plot.shuttlecock.q(Q=1+0*Hi,S=this.X,Z=this.Z)
+}
+```
+
+```{}
+my.plot.court()
+# 抵抗係数
+v.const <- 400 # 自由落下のときの定常速度 m/s
+sigma <- -g[3]*m/(v.const^2)
+
+sigma2 <- sigma
+# 初期シャトルコック向き
+Z0 <- this.Z
+
+# 初速度
+V0 <- initial.velocity
+# 初期回転速度
+# tmp.q <- my.rotation.q(c(1,0.2,0),c(0,0,-1))
+
+A0 <- rot.axis
+Theta0 <- rot.theta
+Q0 <- my.calc.q(A0,Theta0)
+
+t <- seq(from=0,to=2,length=100)
+dt <- t[2]-t[1]
+
+Xs <- Zs <- Vs <- As <- matrix(0,length(t),3)
+Thetas <- rep(0,length(t))
+Qs <- rep(0*Hi,length(t))
+
+Xs[1,] <- X0
+Zs[1,] <- Z0
+Vs[1,] <- V0
+Qs[1] <- Q0
+As[1,] <- A0
+Thetas[1] <- Theta0
+
+for(i in 1:(length(t)-1)){
+#for(i in 1:40){
+  this.X <- Xs[i,]
+  this.V <- Vs[i,]
+  this.Z <- Zs[i,]
+  this.Q <- Qs[i]
+  this.A <- As[i,]
+  this.Theta <- Thetas[i]
+  next.X <- Xs[i,] + this.V * dt
+  this.rotation.q <- my.calc.q(this.A,this.Theta * dt)
+  next.Z <- my.rotation.with.q(this.Z,this.rotation.q)
+  #print("Z,V,A,Theta,Q")
+  #print(this.Z)
+  #print(this.V)
+  #print(this.A)
+  #print(this.Theta)
+  #print(this.Q)
+  
+  tmp.out <- my.airo.drag(this.Z,this.V,sigma=sigma)
+  #print(tmp.out)
+  f.acc <- (tmp.out$f.acc/m + g)*dt
+  next.V <- this.V + f.acc
+  
+  #print(sign(this.V) * sign(f.acc))
+  
+  this.rot.axis <- tmp.out$rot.axis
+  #print("rot.axis")
+  #print(this.rot.axis)
+  this.rot.theta <- tmp.out$rot.theta * dt * sigma2
+  #print(this.rot.theta)
+  this.rot.q <- my.calc.q(this.rot.axis,this.rot.theta)
+  
+  
+  
+  # 回転も、速度の二乗に比例して遅くなる成分を持つこととする。
+  Lv <- sqrt(sum(this.V^2))
+  small.theta <- this.theta * 1/(sigma2 * Lv^2)
+  this.Q.small <- my.calc.q(this.rot.axis,small.theta)
+  #next.Q <- this.Q * this.rot.q
+  
+  next.Q <- this.Q.small
+  if(abs(next.Q)>1){
+    next.Q <- sign(next.Q) * 1
+  }
+  tmp.q <- Im(next.Q)
+  tmp.q <- tmp.q/Mod(tmp.q)
+  
+  next.A <- my.q2v(tmp.q)
+  next.Theta <- acos(Re(next.Q)) * 2
+  
+  Xs[i+1,] <- next.X
+  Vs[i+1,] <- next.V
+  Zs[i+1,] <- next.Z
+  Qs[i+1] <- next.Q
+  As[i+1,] <- next.A
+  Thetas[i+1] <- next.Theta
+  #print("NEXT")
+  #print(next.Z)
+  #print(next.V)
+  #print(next.A)
+  #print(next.Theta)
+  #print(next.Q)
+  
+  #my.plot.shuttlecock.q(Q=this.Q,S=this.X,Z=Z0)
+  my.plot.shuttlecock.q(Q=1+0*Hi,S=this.X,Z=this.Z)
+}
+```
+
+## 自由落下
+```{r}
+my.plot.court()
+# 抵抗係数
+v.const <- 400 # 自由落下のときの定常速度 m/s
+sigma <- -g[3]*m/(v.const^2)
+# 初期シャトルコック向き
+Z0 <- c(0,0,-1)
+
+# 初速度
+V0 <- c(0,0,0)
+# 初期回転速度
+# tmp.q <- my.rotation.q(c(1,0.2,0),c(0,0,-1))
+
+A0 <- c(0,0,-1)
+Theta0 <- 0
+Q0 <- my.calc.q(A0,Theta0)
+
+t <- seq(from=0,to=5,length=30)
+dt <- t[2]-t[1]
+
+Xs <- Zs <- Vs <- As <- matrix(0,length(t),3)
+Thetas <- rep(0,length(t))
+Qs <- rep(0*Hi,length(t))
+
+Xs[1,] <- X0
+Zs[1,] <- Z0
+Vs[1,] <- V0
+Qs[1] <- Q0
+As[1,] <- A0
+Thetas[1] <- Theta0
+
+for(i in 1:(length(t)-1)){
+  this.X <- Xs[i,]
+  this.V <- Vs[i,]
+  this.Z <- Zs[i,]
+  this.Q <- Qs[i]
+  this.A <- As[i,]
+  this.Theta <- Thetas[i]
+  next.X <- Xs[i,] + this.V * dt
+  this.rotation.q <- my.calc.q(this.A,this.Theta * dt)
+  next.Z <- my.rotation.with.q(this.Z,this.rotation.q)
+  
+  tmp.out <- my.airo.drag(this.Z,this.V,sigma=sigma)
+  f.acc <- (tmp.out$f.acc/m + g)*dt
+  next.V <- this.V + f.acc
+  
+  this.rot.axis <- tmp.out$rot.axis
+  this.rot.theta <- tmp.out$rot.theta * dt
+  this.rot.q <- my.calc.q(this.rot.axis,this.rot.theta)
+  
+  next.A <- my.rotation.with.q(this.A,this.rot.q)
+  next.Q <- this.Q * this.rot.q
+  if(abs(next.Q)>1){
+    next.Q <- sign(next.Q) * 1
+  }
+  next.Theta <- acos(Re(next.Q)) * 2
+  
+  Xs[i+1,] <- next.X
+  Vs[i+1,] <- next.V
+  Zs[i+1,] <- next.Z
+  Qs[i+1] <- next.Q
+  As[i+1,] <- next.A
+  Thetas[i+1] <- next.Theta
+  
+  my.plot.shuttlecock.q(Q=this.Q,S=this.X,Z=Z0)
+}
+```
+
+```{}
+open3d()
+for(i in 1:length(t)){
+  this.S <- f.acc * t[i]
+  this.theta <- rot.theta * t[i]
+  this.Q <- my.calc.q(rot.axis,this.theta)
+  #print(this.Q)
+  # cos(this.theta/2) + sin(this.theta/2) * (rot.axis[1] * Hi + rot.axis[2] * Hj + rot.axis[3] * Hk)
+  my.plot.shuttlecock.q(Q=this.Q,S=this.S,Z=Z)
+}
+
+```

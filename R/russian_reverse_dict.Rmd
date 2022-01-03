@@ -279,13 +279,23 @@ my.inv.database <- my.make.database(pth=pth,gr.info=gr.info)
 ## 検索する
 
 ```{r}
-wordtail <- "лений"
+wordtail <- "цветы"
 tails <- my.summary.tail(wordtail,my.inv.database,tocheck=c(1,2,3,4,5))
 stat.out <- my.summary.tail.stat(wordtail,my.inv.database,tocheck=c(1,2,3,4,5))
 my.print.stat(stat.out)
+out0 <- my.search.tail(wordtail,my.inv.database,tocheck=c(1,2,3,4,5))
+
+out0.unlist <- unlist(out0)
+k <- 5
+for(i in 1:k){
+  print("----")
+  print(my.inv.database[[out0.unlist[length(out0.unlist)-i+1]]])
+}
+
+
 ```
 
 ```{r}
-out0 <- my.search.tail("вила",my.inv.database,tocheck=c(1,2,3))
+out0 <- my.search.tail("Профессор",my.inv.database,tocheck=c(1,2,3))
 out <- my.search.tail("вила",my.inv.database)
 ```

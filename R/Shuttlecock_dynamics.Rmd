@@ -1,0 +1,303 @@
+---
+title: "シャトルコックの流体力学"
+author: "Ryo Yamada"
+date: "2021/12/31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 参考文献
+
+Shuttlecock dynamics, by Baptiste Darbois Texier et al.
+
+## 力学　微分方程式
+
+$$
+m\frac{d \overrightarrow{U}}{dt} = mg - \frac{1}{2}\rho S C_D U  \overrightarrow{U}
+$$
+
+```{r}
+g <- c(0,-9.8)
+m <- 5 * 10^(-3)
+S <- 30 * 10^(-3)
+rho <- 1
+Cd <- 1
+theta <- pi/7
+V0 <- 100
+U0 <- c(cos(theta),sin(theta)) * V0
+
+t <- seq(from=0,to=10,length=1000)
+dt <- t[2]-t[1]
+
+Us <- matrix(0,length(t),2)
+Us[1,] <- U0
+
+for(i in 2:length(t)){
+  v <- sqrt(sum(Us[i-1,]^2))
+  dU <- dt * (g - 1/2*rho*S*Cd*v * Us[i-1,])
+  Us[i,] <- Us[i-1,]+dU
+}
+```
+
+速度変化
+```{r}
+matplot(t,Us,type="l",xlab="time",ylab="x,y,速さ")
+```
+
+位置座標
+```{r}
+Xs <- apply(Us*dt,2,cumsum)
+matplot(t,Xs,type="l",xlab="time",ylab="x,y,座標")
+```
+軌跡
+```{r}
+plot(Xs,xlab="x",ylab="y",type="l")
+```
+## その射出高さにまで落ちたときの飛距離の近似解
+
+$$
+x = \frac{1}{2} L \cos{\theta} \ln{(1+4 (\frac{U_0}{U_\infty})^2 \sin{\theta})}
+$$
+
+## シャトルのフリップ～向き転換
+
+シャトルのコルクはラケット面を向いた状態でヒットされ、飛行しながら、コルクの向きを反転させる。
+
+向きが変わった後、軌道が安定しない飛行期間を経て、安定軌道に入る。
+
+重心(質点力学中心）がコルクとスカートのコルク寄りにあり、
+気流力学中心がスカート寄りにある、という、２つの「中心」の不一致がこの現象を作り、規定する。
+
+シャトルの３次元空間の位置と向きを次のように定める。
+
+質点力学中心座標 $W=(w_x,w_y,w_z)$、
+
+シャトルの向きを３次元空間の正規直交基底 $B$ で表し
+
+シャトルのコルクとスカートの向きを$E=B[1,]$とする。
+
+シャトルの長さ $L = 1$、
+
+シャトルの先端$H=(h_x,h_y,h_z)$をラケットがヒットするとして、$H$と$W$の距離、$L_h = k_h \times L$ (ただし$k_h > 0$とする)、
+
+シャトルの気流力学中心$A=(a_x,a_y,a_z)$と$W$の距離、$L_a = k_a \times L$ (ただし、$k_a < 0$ が普通のシャトルコック )。
+
+
+```{r}
+W0 <- c(0,0,0)
+E0 <- c(1,0,0)
+
+my.HA <- function(W,E,L=1,k_h=0.3,k_a=-0.2){
+ H <- W + E * L * k_h
+ A <- W + E * L * k_a
+ return(list(H=H,A=A))
+}
+
+my.HA(W0,E0)
+
+```
+
+シャトルコックの形をそれっぽく描く。
+
+コルクを球で、スカートを２枚の三角形で表し、質点力学中心を赤い点、気流力学中心を水色の点で表す。
+
+```{r}
+library(rgl)
+my.shuttlecock <- function(W=c(0,0,0),B=matrix(c(1,0,0,0,1,0,0,0,1),3,3),L=1,k_h=0.3,k_a=-0.2,r_h=0.2,r_s=0.4,newWindow=FALSE){
+  E <- c(B[1,])
+  tmp <- my.HA(W,E,L=L,k_h=k_h,k_a=k_a)
+  corc.ctr <- tmp$H - r_h * E
+  if(newWindow){
+    open3d()
+  }
+  
+  spheres3d(corc.ctr,radius=r_h,alpha=0.7)
+  #spheres3d(W,radius=L*0.05,col=2)
+  
+  tail <- W - (1-k_h) * E
+  skirt1 <- tail + r_s * c(B[2,])
+  skirt2 <- tail + r_s * c(B[3,])
+  triangles3d(rbind(tmp$H,tail,skirt1),col=3)
+  triangles3d(rbind(tmp$H,tail,skirt2),col=4)
+  spheres3d(W,radius=L*0.05,col=2)
+  spheres3d(tmp$A,radius=L*0.05,col=5)
+}
+my.shuttlecock(W0,newWindow=TRUE)
+```
+
+$H$が点であるなら、以下のようになる。
+
+$H$に加わる力を、$Q = (q_x,q_y,q_z)$とすると、その力は、$E$方向に関して、$W$に伝わり、$W$の質点的加速度を与える。
+
+$E$と垂直な方向について、$E$を回転させる力となる。
+
+しかしながら、コルク部分は球形なので、フラットにヒットしたならば、その力そのままにシャトルの飛ぶ方向が決まるものとする。
+
+ヒットするときに、カットやリバースなどの力を加えるとシャトルの$B$の回転が発生する。
+
+シャトルコックの速度ベクトルを$V=(v_x,v_y,v_z) = p (v_{x,e},v_{y,e},v_{z,e}): p= |V|$とすると、
+シャトルは、$A$に抵抗力$D=(d_x,d_y,d_z)$を受ける。
+
+$D$は$E$の方向成分で、質点力学中心の速度を遅くする加速度を作り、$E$と垂直な成分が$E$を回転させる力となる。
+
+なお、シャトルコックのスカートの羽は、一枚ずつ少しずつ重ねてあるので、$V$と$E$の方向が一致しているときにも、風車のように回転力が発生する。
+
+$B[2,]$から$B[3,]$に向かう回転が生じるものとする。
+
+この力は、シャトルの進行軸とシャトルの軸とが一致しているときに大きくなり、２軸がずれると発生しない。
+
+それは、シャトルの羽がシャトル軸に対して斜めになったスカートの形をしているからである。
+16枚の羽根ごとに発生回転力異なるから。
+
+実際、気流力学中心と呼ばれるものは、16枚の羽根にで発生する抵抗力の和を気流力学中心をヒットしているものとみなしているのである。
+
+簡便のためにその力は、気流力学中心に発生する$B$の回転力に比例するものとする。
+
+シャトルコックの時系列変化は、$W$の変化と$B$の変化によって現わされる。
+
+```{r}
+my.head.hit <- function(B,Q,L=L,k_h=k_h,k_a=k_a,m=m){
+  E <- B[1,]
+  QB1 <- sum(E*Q)
+  V <- QB1 * E / m # 質点加速度
+  
+  # 回転の力の軸はB[1,]とQ(の垂直成分)の外積ベクトル
+  #Q.orth <- Q - QB1 * E
+  Q.orth <- Q # 外積では内積成分が勝手に差し引かれるので…
+  outerprod <- c(E[2]*Q.orth[3]-E[3]*Q.orth[2],E[3]*Q.orth[1]-E[1]*Q.orth[3],E[1]*Q.orth[2]-E[2]*Q.orth[1])
+  
+  r.v <- sqrt(sum(outerprod^2))
+  r.axis <- outerprod/r.v
+  r.v <- r.v / m * (L*k_h)
+  
+  return(list(V=V,R=list(r.v=r.v,r.axis=r.axis)))
+}
+
+my.aerodrag <- function(B,U,L=L,k_h=k_h,k_a=k_a,m=m,rho=rho,sigma=sigma){
+  # Uに応じたQで、気流力学中心をヒットすることに相当する部分は
+  # my.head.hit()を流用できる
+  Q <- -U * rho
+  U.unit <- U/sqrt(sum(U^2))
+  E <- B[1,]
+  QB1 <- sum(U.unit*Q)
+  V <- QB1 * U.unit / m # 質点加速度
+  
+  # 回転の力の軸はB[1,]とQ(の垂直成分)の外積ベクトル
+  #Q.orth <- Q - QB1 * E
+  Q.orth <- -Q # 外積では内積成分が勝手に差し引かれるので…
+  outerprod <- c(E[2]*Q.orth[3]-E[3]*Q.orth[2],E[3]*Q.orth[1]-E[1]*Q.orth[3],E[1]*Q.orth[2]-E[2]*Q.orth[1])
+  
+  # 回転の力の向きがHをヒットしたときと逆回転であることは
+  # k_aが負であること（回転角速度が負であること）で表現される
+  r.v <- sqrt(sum(outerprod^2))
+  r.axis <- outerprod/r.v 
+  r.v <-  r.v / m * (L*k_a)
+  
+  # シャトルの風車的力は
+  
+  r.rot.axis <- E
+  r.rot.v <- r.v * sigma
+  
+  return(list(V=V,R=list(r.v=r.v,r.axis=r.axis,r.rot.v=r.rot.v,r.rot.axis=r.rot.axis)))
+}
+
+
+```
+
+クオータニオン-ベースの回転表現で、シャトルコックを表す正規直交基底を変換する。
+```{r}
+library(onion)
+my.base.rotation <- function(B,a,theta){
+  q <- cos(theta/2) + sin(theta/2) * (a[1] * Hi + a[2] * Hj + a[3] *Hk)
+  ret <- matrix(0,3,3)
+  for(i in 1:3){
+    tmp <- B[i,1] * Hi + B[i,2] * Hj + B[i,3] * Hk
+    tmp2 <- Conj(q) * tmp * q
+    ret[i,] <- c(i(tmp2),j(tmp2),k(tmp2))
+  }
+  return(ret)
+}
+```
+
+```{r}
+L=1;k_h=0.3;k_a=-0.2;r_h=0.2;r_s=0.4;m=1
+g <- c(0,0,-9.8) * 10^(-1)
+rho=0.01
+sigma =5
+# 初期状態
+#W0 <- c(0,0,0)
+#B0 <- diag(rep(1,3))
+#U0 <- c(0,0,0) # 止まっている
+
+#Q0 <- c(-1,0,1) # 斜め上に打つ
+
+# ヒット後の状態
+#post.hit <- my.head.hit(B0,Q0,L=L,k_h=k_h,k_a=k_a,m=m)
+#U1 <- U0 + post.hit$V
+#B1 <- my.base.rotation(B0,post.hit$R$r.axis,post.hit$R$r.v)
+
+U1 <- c(-5,0,5)
+B1 <- diag(rep(1,3))
+R1 <- matrix(0,3,3)
+```
+```{r}
+my.plot3d <- function(X){
+  xrg <- range(X[,1])
+  yrg <- range(X[,2])
+  zrg <- range(X[,3])
+  rg <- range(X)
+  #X. <- rbind(X,c(xrg[1],yrg[1],zrg[1]),c(xrg[2],yrg[2],zrg[2]))
+  X. <- rbind(X,rep(rg[1],3),rep(rg[2],3))
+  plot3d(X.)
+}
+```
+```{r}
+# 飛行の離散近似
+
+t <- seq(from=0,to=10,length=1000)
+t <- seq(from=0,to=50,length=20)
+dt <- t[2]-t[1]
+
+Us <- matrix(0,length(t),3)
+Bs <- matrix(0,length(t),9)
+Rs <- Bs
+Xs <- Us
+
+Us[1,] <- U1
+Bs[1,] <- c(B1)
+Rs[1,] <- c(R1)
+Xs[1,] <- rep(0,3)
+
+
+for(i in 2:length(t)){
+  this.B <- matrix(Bs[i-1,],3,3)
+  this.U <- Us[i-1,]
+  tmp <- my.aerodrag(this.B,this.U,L=L,k_h=k_h,k_a=k_a,m=m,rho=rho,sigma=sigma)
+  # return(list(V=V,R=list(r.v=r.v,r.axis=r.axis,r.rot.v=r.rot.v,r.rot.axis=r.rot.axis)))
+  new.U <- this.U + dt * tmp$V + dt * g
+  new.B <- my.base.rotation(this.B,tmp$R$r.axis,tmp$R$r.v*dt)
+  new.B <- my.base.rotation(new.B,tmp$R$r.rot.axis,tmp$R$r.rot.v*dt)
+  Us[i,] <- new.U
+  Bs[i,] <- c(new.B)
+  Xs[i,] <- Xs[i-1,] + this.U * dt
+  #Bs[i,] <- my.base.rotation(Bs[i-1,],tmp$R$r.axis,tmp$R$r.v*dt)
+  #Bs[i,] <- my.base.rotation(Bs[i,],tmp$R$r.rot.axis,tmp$R$r.rot.v*dt)
+}
+
+```
+
+```{r}
+my.plot3d(Xs)
+for(i in 1:length(Bs[,1])){
+  if(i %% 3==1)
+  my.shuttlecock(Xs[i,],B=matrix(Bs[i,],3,3),L=10)
+}
+```
+
+
+
+
+
