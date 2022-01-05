@@ -1,0 +1,688 @@
+---
+title: "シャトルコックの運動シミュレーション"
+author: "Ryo Yamada"
+date: "2022/1/1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## シャトルコックの運動の力学
+
+## シャトルコックについて
+
+### 形
+
+シャトルコックは、頭部(コルク部)とスカート部(羽部)からなる。
+
+全体として、前後軸を中心に線対称。
+
+頭部はおおよそ、半球。
+
+スカート部は12枚の羽根からなる。
+
+12枚の羽根は前後軸の一点から尾部に向かって広がるように配置される。
+
+12枚の羽根は隣接する羽と重なり合う。羽の重なり方は、時計回り・反時計回りで一様。
+
+全長は8.5cm。
+頭部の半径は1.25cm程度。
+尾部のスカート半径は3cm程度。
+
+### 重さ、重心、気流力学中心
+
+シャトルコックの重さは約５mg。
+
+重心は、前後軸上の頭部寄りにある。これはコルクに重量の過半があるからである。
+
+他方、シャトルコックが気体中を移動するときに受ける抵抗力の中心は、前後軸上にあって、重心よりも尾部よりにある。これは、シャトルコックの体積の中心が羽部寄りにあるからである。
+
+この抵抗力の中心を気流力学中心と呼ぶ。
+
+### 力学特性
+
+### 飛行と空気抵抗
+
+#### 重心運動
+
+シャトルコックが前後軸方向に飛行するとき、速さの二乗に比例した抵抗力を受けることが知られている。
+
+https://ci.nii.ac.jp/naid/110007489857 
+
+したがって、ある初速で飛行し始めたシャトルコックは、進行方向を変えずに速やかに速さを減じるが、遅くなってからの減速は緩やかになる。
+
+シャトルコックが自由落下するときには、重力と抵抗力が釣り合う速さに収束する。
+
+### 剛体回転
+
+シャトルコックは重心と気流抵抗中心とがずれている。
+
+重心と気流抵抗中心とが進行方向に一致していないときは、それらが進行方向に一致するような回転力が発生する。
+
+したがって、シャトルコックは飛行しながら、シャトルの前後軸が進行方向に一致するように回転し、両方向が一致するように収束する。
+
+この回転力がシャトルコックの回転モーメントの加速度を生むが、以下のシミュレーションでは、その力学特性は無視した。
+
+より簡便なモデルとして、この方向収束が、速さの二乗に比例するものとして行った。
+
+また、剛体回転運動も飛行しながら、ゼロに収束する。
+
+以下のシミュレーションでは、この剛体回転運動の収束も、速さの二乗に比例するものとして行った。
+
+### ラケットによるシャトルへの運動の付与
+
+ラケット面がシャトルコックの頭部の一点をヒットすることで、重心速度を変化させ、剛体回転運動を変化させる。
+
+シャトルコックの頭部の一点に加えられた力は、頭部球面の法線方向の力と、接線方向の力とに分けて考えることができる。
+
+法線方向の力は、頭部中心に加わり、頭部中心に対して作用する。
+
+頭部中心は重心と異なるので、頭部中心に作用する力のうち、前後軸方向の成分が重心への加速度を生む。
+
+前後軸方向と直角の成分は回転運動の加速度を生む。
+
+接線方向の力は、シャトルコックとラケットとの摩擦によってその大きさが決まる。
+
+多くの場合は、静止摩擦力であり、接面方向の相対速度が大きくなると、非静止摩擦力となる。
+
+実際のプレーにおいて、非静止摩擦力として作用するのは、かなり稀なことである。
+
+接線方向に加わった摩擦力も、重心への加速度と回転運動への加速度を生じる。
+
+## コート
+
+コートは長方形である。
+
+シャトルコックは、コート内に落ちると、成功、そうでないと、失敗とされる。
+
+長方形の長軸の中央にネットが張られる。
+
+ネットは、コート面から鉛直に立ち上がった、ほぼ長方形の面である。
+
+正確には、ネットの上端辺は、懸垂線になっている。
+
+シャトルコックは、ネットの片側からもう片側へ、ネットを超えて移動すると成功、そうでないと失敗とされる。
+
+ネットを超える際、通常は、ネットに触れることはないが、ネットに触れてもよい。
+
+## 実装
+```{r}
+library(onion)
+library(rgl)
+```
+### 3次元回転とクオータニオン関連のユーティリティ関数
+```{r}
+# 3次元ベクトルを純虚クオータニオンに変換する
+my.v2q <- function(v){
+  (v[1]*Hi+v[2]*Hj+v[3]*Hk)
+}
+# クオータニオンの虚部を3次元ベクトルに変換する
+my.q2v <- function(q){
+  c(i(q),j(q),k(q))
+}
+# 3次元単位ベクトルを軸とした回転に相当するクオータニオンqを返す
+# Conj(q) * p *q により、3次元ベクトルに対応する純虚クオータニオンが回転される
+my.calc.q <- function(a,theta){
+  cos(theta/2) + sin(theta/2) * my.v2q(a)
+}
+# 3次元ベクトルの外積ベクトル。２ベクトルの作る面の法線ベクトルとなる
+my.outerprod <- function(v,v0){
+  c(v[2]*v0[3]-v[3]*v0[2],v[3]*v0[1]-v[1]*v0[3],v[1]*v0[2]-v[2]*v0[1])
+}
+# ２つの単位ベクトルv,v0から
+# vを回してv0に重ねるクオータニオンを返す
+my.rotation.q <- function(v,v0){
+  if(sum((v-v0)^2)==0){
+    return(list(q=1+0*Hi,rot.axis=v0,theta=0))
+  }
+  rot.axis <- my.outerprod(v,v0)
+  rot.axis <- rot.axis/sqrt(sum(rot.axis^2))
+  tmp <- sum(v*v0)
+  if(abs(tmp)>1){
+    tmp <- sign(tmp) * 1
+  }
+  theta <- acos(tmp)
+  q <- my.calc.q(rot.axis,theta)
+  return(list(q=q,rot.axis=rot.axis,theta=theta))
+}
+# 3次元ベクトルを回転相当クオータニオンで回転する
+my.rotation.with.q <- function(v,q){
+  v.q <- my.v2q(v)
+  tmp <- Conj(q) * v.q * q
+  return(my.q2v(tmp))
+}
+# 回転クオータニオンから、軸ベクトルと回転角を返す
+my.q2AandTheta <- function(q){
+  Req <- Re(q)
+  if(abs(Req)>1){
+    Req <- sign(Req) * 1
+  }
+  theta <- 2 * acos(Req)
+  Imq <- Im(q)
+  ModImq <- Mod(Imq)
+  if(ModImq == 0){
+    axis <- c(1,0,0)
+  }else{
+    axis <- my.q2v(Imq/ModImq)
+  }
+  return(list(axis=axis,theta=theta))
+}
+my.unit.vec <- function(v){
+  return(v/sqrt(sum(v^2)))
+}
+# ２つの単位ベクトルを入力とし
+# v1 を回転して v2にする処理を考える
+# 回転軸は同じで角度がある割合で拡縮したクオータニオンを返す
+my.frac.q <- function(v1,v2,f){
+  out1 <- my.rotation.q(v2,v1)
+  rot.axis <- out1$rot.axis
+  theta <- out1$theta
+  new.theta <- f * theta
+  new.q <- my.calc.q(rot.axis,new.theta)
+  return(new.q)
+}
+```
+
+### シャトルコックの形状とコート
+
+```{r}
+# シャトルのサイズの単位はcm
+my.shuttlecock <- function(){
+  H <- c(0,0,0) # 先端
+  hR <- 1.25 # 頭部コルク半径
+  wL <- 1.7 # 先端から重心までの長さ
+  aL <- 1.8 # 先端から気流力学中心
+  L <- 8.5 # 長軸長
+  FcL <- -0.3 # 羽の終結点の先端からの距離
+  sR <- 3 # 羽のスカートの作る底面円の半径
+  sRmin <- 2.9
+  sRmax <- 3.1
+  
+  Fc <- H + c(FcL,0,0) # 羽の終結点座標
+  Hc <- H + c(hR,0,0) # 頭部の中心
+  Wc <- H + c(wL,0,0) # 重心
+  Ac <- H + c(aL,0,0) # 気流力学中心
+  # 羽のスカート端
+  nF <- 12
+  t <- seq(from=0,to=1,length=nF+1) * 2 * pi
+  t <- t[-1]
+  
+  innerS <- cbind(rep(L,nF),sRmin * cos(t),sRmin * sin(t))
+  outerS <- cbind(rep(L,nF),sRmax * cos(t),sRmax * sin(t))
+  outerS <- outerS[c(2:nF,1),]
+  
+  return(list(H=H,Hc=Hc,Fc=Fc,Wc=Wc,Ac=Ac,innerS = innerS,outerS=outerS,hR=hR))
+}
+# シャトルコックの標準位置
+#（頭部先端を原点とし、シャトル軸がx軸となりスカートのx座標が正)を基準とし
+# 回転行列Rで回転
+# ベクトルSで平行移動した像を描く
+# new = TRUEで新たな3次元ウィンドウを作る
+# そうでなければ、すでにあるウィンドウに重ね書き
+my.plot.shuttlecock <- function(R = diag(rep(1,3)),S=rep(0,3),new=FALSE){
+  st <- my.shuttlecock()
+  nh <- 1
+  nFc <- 1
+  ninnerS <- length(st$innerS[,1])
+  nouterS <- length(st$outerS[,1])
+  
+  tmp <- rbind(st$H,st$Hc,st$Fc,st$innerS,st$outerS)
+  tmp <- t(t(tmp)-st$Wc)
+  tmp. <- tmp %*% R
+  tmp. <- t(t(tmp.) + S+st$Wc)
+  st2 <- st
+  st2$H <- tmp.[1,]
+  st2$Hc <- tmp.[2,]
+  st2$Fc <- tmp.[3,]
+  st2$innerS <- tmp.[(1+3):(ninnerS+3),]
+
+  st2$outerS <- tmp.[(1+3+ninnerS):(nouterS+3+ninnerS),]
+  if(new){
+    open3d()
+  }
+  
+  spheres3d(st2$Hc,radius=st$hR,alpha=0.5)
+  for(i in 1:ninnerS){
+    tmp2 <- rbind(st2$Fc,st2$innerS[i,],st2$outerS[i,])
+    triangles3d(tmp2,alpha=0.5)
+  }
+}
+# 標準位置は頭部先端が原点、スカート方向がx正方向
+# シャトルコックの軸を頭部先端方向の単位ベクトルとし、それをZで与える
+# 回転をクオータニオンQで与え、平行移動をベクトルSで与える
+# 新たなウィンドウを開くかどうかをnewで制御
+# colはシャトルコックの色
+my.plot.shuttlecock.q <- function(Q = 1 + 0*(Hi+Hj+Hk),S=rep(0,3),Z=c(-1,0,0),new=FALSE,col=1){
+  #Z.q <- my.v2q(Z)
+  Sst <- c(-1,0,0)
+  if(sum((Z-Sst)^2)>0){
+    Z.q <- my.rotation.q(Z,Sst)$q
+  }else{
+    Z.q <- 1 + 0 * Hi
+  }
+  Q <- Z.q * Q
+  st <- my.shuttlecock()
+  nh <- 1
+  nFc <- 1
+  ninnerS <- length(st$innerS[,1])
+  nouterS <- length(st$outerS[,1])
+  
+  tmp <- rbind(st$H,st$Hc,st$Fc,st$innerS,st$outerS)
+  tmp <- t(apply(tmp,1,function(x){x-st$Wc}))
+  tmp. <- t(apply(tmp,1,my.rotation.with.q,q=Q))
+  tmp. <- t(apply(tmp.,1,function(x){x+S+st$Wc}))
+  st2 <- st
+  st2$H <- tmp.[1,]
+  st2$Hc <- tmp.[2,]
+  st2$Fc <- tmp.[3,]
+  st2$innerS <- tmp.[(1+3):(ninnerS+3),]
+
+  st2$outerS <- tmp.[(1+3+ninnerS):(nouterS+3+ninnerS),]
+  if(new){
+    open3d()
+  }
+  
+  spheres3d(st2$Hc,radius=st$hR,alpha=0.5,col=col)
+  for(i in 1:ninnerS){
+    tmp2 <- rbind(st2$Fc,st2$innerS[i,],st2$outerS[i,])
+    triangles3d(tmp2,alpha=0.5)
+  }
+}
+```
+```{r}
+# コート
+# 原点がコートの中心
+# コートの地面がxy平面
+# コートの対戦２領域が、x正負で別れる
+# ネットはz軸正方向にあり、四角形で表現する
+my.court <- function(){
+  Llong <- 1340
+  Lshort <- 610
+  Rec1 <- rbind(c(-Llong/2,Lshort/2,0),c(Llong/2,Lshort/2,0),c(Llong/2,-Lshort/2,0),c(-Llong/2,-Lshort/2,0))
+  
+  Sline <- 198
+  Line1 <- rbind(c(-Sline,Lshort/2,0),c(-Sline,-Lshort/2,0))
+  Line2 <- rbind(c(Sline,Lshort/2,0),c(Sline,-Lshort/2,0))
+  
+  Nhight <- 155
+  Nhight2 <- 152.4
+  LineNet <- rbind(c(0,Lshort/2,Nhight),c(0,-Lshort/2,Nhight))
+  LineCtr <- rbind(c(0,Lshort/2,0),c(0,-Lshort/2,0))
+  Rec2 <- rbind(c(0,-Lshort/2,Nhight),c(0,Lshort/2,Nhight),c(0,Lshort/2,0),c(0,-Lshort/2,0))
+  
+  LinePole1 <- rbind(c(0,Lshort/2,0),c(0,Lshort/2,Nhight))
+  LinePole2 <- rbind(c(0,-Lshort/2,0),c(0,-Lshort/2,Nhight))
+  
+  Recs <- list(Rec1)
+  Lines <- list(Line1,Line2,LineNet,LineCtr,LinePole1,LinePole2)
+  
+  CeilHight <- 400
+  Space <- rbind(c(Llong/2,Lshort/2,0),c(-Llong/2,-Lshort/2,0),c(0,0,CeilHight))
+  
+  return(list(Recs=Recs,Lines=Lines,Space=Space))
+}
+# Spaceは最低限描かれるべき外側の点を点数ｘ３の行列で与える
+my.plot.court <- function(new=TRUE,Space=NULL,col="green",alpha=0.1){
+  Crt <- my.court()
+  
+  if(is.null(Space)){
+    Space <- Crt$space
+  }
+  if(new){
+    open3d()
+    plot3d(Crt$Space,xlab="",ylab="",zlab="",axes=FALSE,aspect=FALSE)
+  }
+  for(i in 1:length(Crt$Recs)){
+    polygon3d(Crt$Recs[[i]],col=col,alpha=alpha)
+  }
+  for(i in 1:length(Crt$Lines)){
+    segments3d(Crt$Lines[[i]])
+  }
+  
+}
+
+# シミュレーション結果をプロットする
+my.plot.sim <- function(out,court=TRUE,new=TRUE,Space=NULL,col="green",alpha=0.1){
+  if(court){
+    my.plot.court(new=new,Space=Space,col=col,alpha=alpha)
+  }else if(court){
+    open3d()
+  }
+  
+  n <- length(out$Xs[,1])
+  for(i in 1:n){
+    this.X <- out$Xs[i,]
+    this.Z <- out$Zs[i,]
+    my.plot.shuttlecock.q(Q=1+0*Hi,S=this.X,Z=this.Z)
+  }
+}
+```
+
+
+## コルクヘッドへのインパクト
+
+シャトルコックが標準配置にあるとき、
+ラケット面は、コルクヘッドの$x > 0$な面に触れて力を伝える。
+
+力は、コルクヘッド面の垂直方向（コルクヘッド中心方向）の力$D_p$と、
+コルクヘッド接触点での接平面方向の摩擦力$D_t$とに分かれる。
+
+$D_p$はシャトルコック重心への力$D_{pw}$とその垂直方向の力$D_{pz}$とに分かれる。
+
+$D_{pw}$は重心への加速度となる。
+
+$D_{pz}$は重心と力点とに関するモーメント力となる。
+
+$D_t$は、摩擦係数に応じて変化した強さ $\rho D_t$が伝わる。
+
+そのうち、重心成分$\rho D_{tw}$が重心への加速度を作る。
+
+残りの$\rho D_{tz}$はモーメント力となる。
+
+```{r}
+# p は接触点の方向単位ベクトル
+# v は力の方向単位ベクトル
+# f は力の強さ
+# rho は摩擦に関する定数係数
+my.head.hit <- function(p,v,f,rho=1){
+  sh <- my.shuttlecock()
+  Wc <- sh$Wc
+  Hc <- sh$Hc
+  Rh <- sh$Rh
+  
+  d_p <- f * sum(p*v) * p
+  # print(sum(p*v))
+  d_t <- rho * ((f * v) - d_p)
+  
+  w2p <- (Hc-Wc) + p
+  L.mom <- sqrt(sum(w2p^2))
+  w2p <- w2p/L.mom
+  
+  d_pw <- sum(d_p * w2p) * w2p
+  d_tw <- sum(d_t * w2p) * w2p
+  
+  d_pz <- d_p - d_pw
+  d_tz <- d_t - d_tw
+  
+  f.acc <- d_pw + d_tw
+  f.mom <- (d_pz + d_tz) * L.mom^2
+  
+  # 回転の力をクオータニオンで表す
+  #v.radius.st
+  v1 <- w2p
+  #v.tangent.st
+  L.f.mom <- sqrt(sum(f.mom^2))
+  if(L.f.mom==0){
+    rot.axis <- v1
+    theta <- 0
+    
+  }else{
+    v2 <- f.mom/L.f.mom
+  
+    rot.axis <- my.outerprod(v1,v2)
+    # c(v1[2]*v2[3]-v1[3]*v2[2],v1[3]*v2[1]-v1[1]*v2[3],v1[1]*v2[2]-v1[2]*v2[1])
+    rot.axis <- rot.axis/sqrt(sum(rot.axis^2))
+    theta <- atan(L.f.mom/L.mom)
+  }
+  q <- my.calc.q(rot.axis,theta)
+  # cos(theta/2) + sin(theta/2) * (Hi * rot.axis[1] + Hj * rot.axis[2] + Hk * rot.axis[3])
+  # 重心に加わる推進力ベクトル f.acc
+  # 重心中心に
+  return(list(f.acc=f.acc,rot.axis=rot.axis,rot.theta=theta,rot.q=q))
+  
+}
+```
+
+
+## ヒット時の姿勢とヒット方向を任意にする
+
+引数を、姿勢情報とヒット方向とにして、
+
+それを、姿勢を基準姿勢に変換して、初速情報を基準姿勢座標で求めたうえで、
+真の姿勢情報に戻す。
+
+重力加速度を物理空間座標で加えることで、重心速度に重力影響を加える。
+
+```{r}
+# p は標準位での接触点の方向単位ベクトル
+# v は標準位での力の方向単位ベクトル
+# f は力の強さ
+# rho は摩擦に関する定数係数
+# Z はシャトルコックの向き
+# P はラケット面の法線方向単位ベクトル(接触点の方向単位ベクトルの逆方向ベクトル) P は -pに相当する
+# V は力の方向単位ベクトル
+
+my.head.hit2 <- function(P,V,Z,f,rho=1){
+  # 標準位の方向ベクトル
+  Sst <- c(-1,0,0)
+  if(sum((Z-Sst)^2)>0){
+    rot.q <- my.rotation.q(Sst,Z)$q
+  }else{
+    rot.q <- 1 + 0 * Hi
+  }
+  
+  Vst <- my.rotation.with.q(V,rot.q)
+  Pst <- my.rotation.with.q(P,rot.q)
+  
+  p <- -Pst
+  v <- Vst
+  out.st <- my.head.hit(p,v,f,rho=rho)
+  # return(list(f.acc=f.acc,rot.axis=rot.axis,rot.theta=theta,rot.q=q))
+  rot.q.inv <- my.rotation.q(Z,Sst)$q
+  f.acc <- my.rotation.with.q(out.st$f.acc,rot.q.inv)
+  rot.axis <- my.rotation.with.q(out.st$rot.axis,rot.q.inv)
+  rot.theta <- out.st$rot.theta
+  rot.q <- my.calc.q(rot.axis,rot.theta)
+  
+  return(list(f.acc=f.acc,rot.axis=rot.axis,rot.theta=rot.theta,rot.q=rot.q))
+}
+```
+
+## 飛行抵抗の気流力学中心への作用
+
+シャトルコックの形は複雑なので、気流抵抗の強さと向きは進行方向によって複雑に変化すると思われるが、
+次のように単純化できるらしい。
+
+シャトルコックのある場所を気流抵抗中心とすると、
+その点が重心速度の逆方向に、重心速度に比例した力が発生したとしたものが、シャトルコックの表面全体に生じる気流抵抗の積算になるとする。
+
+そしてその力のうちの重心方向成分が、重心加速度となり、垂直成分がモーメントとなる。
+
+自由落下するシャトルはある速さになると、重力加速度と空気抵抗力とが拮抗し、定常状態になる。
+その速さを指定し、空気抵抗力の計算のための係数を定める。
+
+また、シャトルの回転は、ちょっと難しいので次のようにすることにする。
+
+初期回転速度は、減衰することとする。
+回転には空気抵抗力が加速度として寄与しないこととする。
+
+進行方向軸とシャトル軸のずれはそれを補正するように変化する（減衰する）ものとする。
+
+```{r}
+# 重心速度は、速度の2乗に比例して減速する
+# 重力加速度 g の下での
+# 微小時間 dt 後の速度ベクトルを返す
+my.airo.drag.v <- function(V,dt,m,g=c(0,0,-9.8)*100,sigma=1){
+  new.V <- V - sigma * sqrt(sum(V^2)) * V / m *dt  + g * dt
+  return(new.V)
+}
+# 空気抵抗力により軸回転速度Qが変化する
+# その変化量は重心の速さに比例する
+# 微小時間 dt 後の軸回転速度を返す
+my.airo.drag.q <- function(Q,V,dt,m,sigma=1){
+  tmp <- 1-sigma * sqrt(sum(V^2))  / m *dt
+  theta <- acos(Re(Q)) * 2
+  new.theta <- theta*tmp
+  ImQ <- Im(Q)
+  ImQ. <- ImQ/Mod(ImQ)
+  A <- my.q2v(ImQ.)
+  new.Q <- my.calc.q(A,new.theta)
+  return(new.Q)
+}
+# 空気抵抗力によるり軸が変化する
+# その変化量は重心の速さに比例する
+# 微小時間 dt 後の軸の単位ベクトルを返す
+my.airo.drag.Z <- function(Z,V,dt,m,sigma=1){
+  tmp <- 1-sigma * sqrt(sum(V^2))  / m *dt
+  V.L <- sqrt(sum(V^2))
+  if(V.L==0){
+    return(Z)
+  }
+  V.st <- V/V.L
+  q <- my.frac.q(V.st,Z,tmp)
+  new.Z <- my.rotation.with.q(V.st,q)
+  return(new.Z)
+  
+}
+```
+
+## シミュレーション関数
+
+```{r}
+my.hit.sim <- function(P0,F0,f0,X0=c(-200,0,115),Z0=c(-0.2,0,-0.4),V0=c(0,0,0),Q0=0*Hi,dt=0.05,max.time=3,end.z=0,sigma.q=1,sigma.a=1,g=c(0,0,-9.8)*100,m=5,v.const=400,draw=TRUE,new=TRUE,Space=my.court()$Space,col="green",alpha=0.1){
+  if(draw){
+    my.plot.court(new=new,Space=Space,col=col,alpha=alpha)
+  }
+  # 自由落下モデルにて抵抗係数 sigma.vは決める
+  sigma.v <- -g[3]*m/(v.const^2)
+  
+  # ヒットによる加速度を計算
+  hit <- my.head.hit2(P0,F0,Z0,f0)
+  f.acc <- hit$f.acc
+  rot.axis <- hit$rot.axis
+  rot.theta <- hit$rot.theta/m
+  
+  # ヒット後の初期状態
+  # 初期シャトルコックの位置と向き（変わらない）
+  X1 <- X0
+  Z1 <- Z0
+
+  # ヒット後速度
+  initial.velocity <- f.acc/m
+  V1 <- V0 + initial.velocity
+  A1 <- rot.axis
+  Theta1 <- rot.theta
+
+  # ヒット後回転速度
+  # ヒット前の回転にヒット影響を掛け算して作ることにする
+  Q1 <- Q0 * my.calc.q(A1,Theta1)
+  AandTheta <- my.q2AandTheta(Q1)
+
+  # 経時的飛行シミュレーション
+  t <- seq(from=0,to=max.time,by=dt)
+  Xs <- Zs <- Vs <- matrix(0,length(t),3)
+  Qs <- rep(0*Hi,length(t))
+
+  Xs[1,] <- X1
+  Zs[1,] <- Z1
+  Vs[1,] <- V1
+  Qs[1]  <- Q1
+  
+  for(i in 1:(length(t)-1)){
+    if(Xs[i,3] < end.z){
+      break
+    }
+    this.X <- Xs[i,]
+    this.V <- Vs[i,]
+    this.Z <- Zs[i,]
+    this.Q <- Qs[i]
+    next.X <- Xs[i,] + this.V * dt
+
+    next.V <- my.airo.drag.v(this.V,dt=dt,m=m,g=g,sigma=sigma.v)
+    next.Q <- my.airo.drag.q(this.Q,this.V,dt=dt,m=m,sigma=sigma.q)
+    next.Z <- my.airo.drag.Z(this.Z,this.V,dt=dt,m=m,sigma=sigma.a)
+  
+    Xs[i+1,] <- next.X
+    Vs[i+1,] <- next.V
+    Zs[i+1,] <- next.Z
+    Qs[i+1]  <- next.Q
+    
+    if(draw){
+      my.plot.shuttlecock.q(Q=1+0*Hi,S=this.X,Z=this.Z)
+    }
+  }
+  return(list(Xs=Xs[1:i,],Zs=Zs[1:i,],Vs=Vs[1:i,],Qs=Qs[1:i]))
+}
+```
+
+共通設定
+```{r}
+# 重力加速度（環境加速度)
+g <- c(0,0,-9.8)*100  # 9.8m/s^2, 980cm/s^2
+# 質量の係数
+m <- 5 # 単位はgram
+# 抵抗係数
+v.const <- 400 # 自由落下のときの定常速度 cm/s
+sigma.v <- -g[3]*m/(v.const^2)
+```
+
+その他のシャトル特性設定
+```{r}
+# 回転加速度係数
+sigma.q <- sigma.v * m 
+# 軸収束係数
+sigma.a <- sigma.v * m *0.5
+```
+
+シミュレーション設定
+```{r}
+# 微小時間
+dt <- 0.005
+# シミュレーション実施最大時間
+max.time <- 3
+# Z軸座標がend.zに到達したら、終了
+end.z <- 0
+```
+
+
+
+## 各種シミュレーション
+打つ前のシャトルの状態と打ち方による設定
+
+```{r}
+# 打つ前のシャトルの位置
+X0 <- c(-200,0,115)
+# 打つ前のシャトルの軸
+Z0 <- my.unit.vec(c(-1,0,-1))
+# 打つ前のシャトルの重心速度ベクトル
+V0 <- c(0,0,0)
+# 打つ前のシャトルの回転運動クオータニオン
+Q0 <- 1 + 0 * Hi
+
+# ラケットの法線単位ベクトル
+P0 <- my.unit.vec(c(1,0.4,0.1))
+# 力ベクトルの法線ベクトル
+F0 <- my.unit.vec(c(1,0.3,1))
+# 与える力
+f0 <- 11000
+```
+
+```{r}
+out1 <- my.hit.sim(P0=P0,F0=F0,f0=f0,X0=X0,Z0=Z0,V0=V0,Q0=Q0,dt=dt,max.time=max.time,end.z=end.z,sigma.q=sigma.q,sigma.a=sigma.a,g=g,m=m,v.const=v.const)
+```
+
+## ヘアピン
+
+```{r}
+# 打つ前のシャトルの位置
+X0 <- c(-20,0,65)
+# 打つ前のシャトルの軸
+Z0 <- my.unit.vec(c(0,0,-1))
+# 打つ前のシャトルの重心速度ベクトル
+V0 <- c(0,0,0)
+# 打つ前のシャトルの回転運動クオータニオン
+Q0 <- 1 + 0 * Hi
+
+# ラケットの法線単位ベクトル
+P0 <- my.unit.vec(c(0.2,0,1))
+# 力ベクトルの法線ベクトル
+F0 <- my.unit.vec(c(25,0,5))
+# 与える力
+f0 <- 9000
+```
+
+```{r}
+out2 <- my.hit.sim(P0=P0,F0=F0,f0=f0,X0=X0,Z0=Z0,V0=V0,Q0=Q0,dt=dt,max.time=max.time,end.z=end.z,sigma.q=sigma.q,sigma.a=sigma.a,g=g,m=m,v.const=v.const)
+```
